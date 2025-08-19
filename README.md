@@ -4,6 +4,31 @@ Verity is an AI-powered research platform on **NEAR Protocol** that converts sur
 
 **Helping startups find Product Market Fit with fewer wrong turns and wasted time.**
 
+## Quickstart
+
+### Prerequisites
+
+- Node.js
+- pnpm
+
+### Install Dependencies
+
+```bash
+pnpm install
+```
+
+### Run Locally
+
+```bash
+pnpm dev
+```
+
+### Run Tests
+
+```bash
+pnpm test
+```
+
 ## 🚀 What We’re Building
 
 Verity is an **AI-powered user research platform** that:
