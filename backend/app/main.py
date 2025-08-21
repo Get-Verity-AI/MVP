@@ -5,6 +5,7 @@ import hashlib, json, os, uuid
 from enum import Enum
 from typing import List, Optional
 import glob
+from fastapi.middleware.cors import CORSMiddleware
 from Crypto.Hash import keccak  
 
 
