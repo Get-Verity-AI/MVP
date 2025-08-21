@@ -277,9 +277,10 @@ def _stamp_to_isoz(stamp: str) -> str:
 
 # ---------- SUMMARY ENDPOINT ----------
 # ---------- SUMMARY ENDPOINT ----------
-  @app.get("/summary")   # ← extra spaces cause "unexpected indent"
+  @app.get("/summary")
 def get_summary(session_id: str):
-
+    if not session_id or not str(session_id).strip():
+        raise HTTPException(status_code=400, detail="session_id is required")
     files = _response_files_for_session(session_id)
     stamps = [s for s in (_stamp_from_filename(p) for p in files) if s]
     first_ts = _stamp_to_isoz(min(stamps)) if stamps else None
