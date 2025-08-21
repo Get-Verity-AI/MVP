@@ -265,16 +265,17 @@ def hash_text(payload: HashRequest):
 
 
 def _stamp_from_filename(path: str) -> str | None:
-    """Extract YYYYMMDDTHHMMSSZ from the start of filename."""
+    """Extract leading YYYYMMDDTHHMMSSZ from a response filename."""
     name = os.path.basename(path)
     stamp = name.split("_", 1)[0]
     return stamp if len(stamp) == 16 and stamp.endswith("Z") else None
 
 def _stamp_to_isoz(stamp: str) -> str:
-    """Convert YYYYMMDDTHHMMSSZ -> ISO8601 with 'Z'."""
+    """Convert YYYYMMDDTHHMMSSZ -> ISO8601 + 'Z' suffix."""
     dt = datetime.strptime(stamp, "%Y%m%dT%H%M%SZ")
     return dt.isoformat() + "Z"
 
+# ---------- SUMMARY ENDPOINT ----------
 # ---------- SUMMARY ENDPOINT ----------
   @app.get("/summary")
 def get_summary(session_id: str):
@@ -290,8 +291,6 @@ def get_summary(session_id: str):
         "first_ts": first_ts,
         "last_ts": last_ts,
     }
-
-
 
 def _response_files_for_session(session_id: str) -> list[str]:
     """Return list of response JSON file paths for a given session_id."""
