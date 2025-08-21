@@ -6,7 +6,7 @@ from enum import Enum
 from typing import List, Optional
 import glob
 from Crypto.Hash import keccak  
-from datetime import datetime
+
 
 
 app = FastAPI(title="Verity Backend", version="0.2.0")
@@ -277,7 +277,7 @@ def _stamp_to_isoz(stamp: str) -> str:
 
 # ---------- SUMMARY ENDPOINT ----------
 # ---------- SUMMARY ENDPOINT ----------
-  @app.get("/summary")
+@app.get("/summary")
 def get_summary(session_id: str):
     if not session_id or not str(session_id).strip():
         raise HTTPException(status_code=400, detail="session_id is required")
