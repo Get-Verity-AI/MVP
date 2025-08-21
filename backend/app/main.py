@@ -1,7 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from datetime import datetime
 import hashlib, json, os, uuid
+from enum import Enum
+from typing import List, Optional
+import glob
+
 
 app = FastAPI(title="Verity Backend", version="0.2.0")
 
@@ -93,3 +97,138 @@ def store_response(payload: ResponsePayload):
 def store_response_alias(payload: ResponsePayload):
     """Backward-compat alias for /responses."""
     return store_response(payload)
+# ---------- SCRIPT MODELS ----------
+class StepType(str, Enum):
+    text = "text"            # read-only message
+    input_text = "input_text"
+    input_scale = "input_scale"
+    input_email = "input_email"
+
+class Step(BaseModel):
+    id: str
+    type: StepType
+    prompt: str
+    next: Optional[str] = None
+    min: Optional[int] = None     # only for input_scale
+    max: Optional[int] = None
+    required: bool = True
+
+class Script(BaseModel):
+    session_id: str
+    domain: str
+    value_prop: str
+    target_action: str
+    steps: List[Step]
+
+def _load_session_founder_inputs(session_id: str) -> dict:
+    """
+    Finds the first session file matching *_<session_id>.json under SESSIONS_DIR
+    and returns founder_inputs dict. Raises HTTPException(404) if not found.
+    """
+    pattern = os.path.join(SESSIONS_DIR, f"*_{session_id}.json")
+    matches = sorted(glob.glob(pattern))
+    if not matches:
+        raise HTTPException(status_code=404, detail="session not found")
+    with open(matches[0], "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data.get("founder_inputs", {})
+def _build_script(founder_inputs: dict, session_id: str) -> Script:
+    domain = founder_inputs.get("problem_domain") or founder_inputs.get("idea_summary") or "this space"
+    value_prop = founder_inputs.get("value_prop") or "a product that solves the problem"
+    target_action = founder_inputs.get("target_action") or "sign up"
+
+    steps: List[Step] = [
+        Step(
+            id="intro",
+            type=StepType.text,
+            prompt=(
+                "Hi! Thanks for taking the time.\n"
+                "This is early research for a new idea. Please be brutally honest — "
+                "your answers help the founder learn what's really going on."
+            ),
+            next="context",
+            required=False,
+        ),
+        Step(
+            id="context",
+            type=StepType.input_text,
+            prompt=(
+                f'About "{domain}": what are you trying to achieve lately?\n'
+                "What have you tried? What emotions come up as you work on it?"
+            ),
+            next="problem_intro",
+        ),
+        Step(
+            id="problem_intro",
+            type=StepType.text,
+            prompt="Thanks! Let’s zoom into a specific problem area the founder is exploring.",
+            next="resonance",
+            required=False,
+        ),
+        Step(
+            id="resonance",
+            type=StepType.input_scale,
+            prompt=(
+                "On a scale of 1–5, how much does this resonate?\n"
+                '“I struggle to stay focused/productive through the day due to notifications, email, priorities.”'
+            ),
+            min=1, max=5, next="explanation",
+        ),
+        Step(
+            id="explanation",
+            type=StepType.input_text,
+            prompt="Why that score? Any situation or example come to mind?",
+            next="action",
+        ),
+        Step(
+            id="action",
+            type=StepType.input_text,
+            prompt="Have you tried anything to tackle this? How did it go?",
+            next="value_prop",
+        ),
+        Step(
+            id="value_prop",
+            type=StepType.input_text,
+            prompt=(
+                f'Value prop to react to:\n“{value_prop}”.\n'
+                f'If it delivered, how likely would you be to: {target_action}? Why?'
+            ),
+            next="price_test",
+        ),
+        Step(
+            id="price_test",
+            type=StepType.input_text,
+            prompt="If it worked as promised, what would you expect to pay? What feels fair vs expensive?",
+            next="intent",
+        ),
+        Step(
+            id="intent",
+            type=StepType.input_email,
+            prompt="Can we share your email with the founder for early access invites?",
+            next="closing",
+        ),
+        Step(
+            id="closing",
+            type=StepType.text,
+            prompt="That’s it — anything else we should understand? Thanks a ton 🙏",
+            next=None,
+            required=False,
+        ),
+    ]
+
+    return Script(
+        session_id=session_id,
+        domain=domain,
+        value_prop=value_prop,
+        target_action=target_action,
+        steps=steps,
+    )
+# ---------- /script ENDPOINT ----------
+@app.get("/script", response_model=Script)
+def get_script(session_id: str):
+    """
+    Returns the interview script for the given session_id.
+    Requires that POST /session was called earlier (file lives under data/sessions/*_<session_id>.json).
+    """
+    founder_inputs = _load_session_founder_inputs(session_id)
+    return _build_script(founder_inputs, session_id=session_id)
