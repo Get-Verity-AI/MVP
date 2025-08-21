@@ -262,14 +262,20 @@ def hash_text(payload: HashRequest):
 
     return HashResponse(sha256=sha, keccak=keccak_digest)
 
-# ---------- SUMMARY ENDPOINT (skeleton) ----------
+# ---------- SUMMARY ENDPOINT ----------
 @app.get("/summary")
 def get_summary(session_id: str):
-    # Phase 1: skeleton, return placeholder
+    files = _response_files_for_session(session_id)
     return {
         "session_id": session_id,
-        "responses_count": 0,
+        "responses_count": len(files),
         "first_ts": None,
-        "last_ts": None
+        "last_ts": None,
     }
 
+
+
+def _response_files_for_session(session_id: str) -> list[str]:
+    """Return list of response JSON file paths for a given session_id."""
+    pattern = os.path.join(RESPONSES_DIR, f"*_{session_id}_*.json")
+    return sorted(glob.glob(pattern))
