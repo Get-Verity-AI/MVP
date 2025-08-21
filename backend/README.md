@@ -18,5 +18,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
   returns `{ session_id }` and saves `backend/data/sessions/*.json`
 - `POST /responses` → body `{ session_id, respondent_id, answers{}, meta? }`  
   saves `backend/data/responses/*.json`
+- `POST /response` → alias to `/responses` (same payload)
+
 - Swagger UI: http://localhost:8000/docs
 
