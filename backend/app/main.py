@@ -5,6 +5,7 @@ import hashlib, json, os, uuid
 from enum import Enum
 from typing import List, Optional
 import glob
+from Crypto.Hash import keccak  
 
 
 app = FastAPI(title="Verity Backend", version="0.2.0")
@@ -244,9 +245,20 @@ class HashResponse(BaseModel):
     sha256: str
     keccak: str
 
+
 @app.post("/hash", response_model=HashResponse)
 def hash_text(payload: HashRequest):
-    # Phase 1: skeleton implementation
-    return HashResponse(sha256="TODO", keccak="TODO")
+    txt = payload.text.strip()
+    if not txt:
+        raise HTTPException(status_code=400, detail="text cannot be empty")
 
+    # sha256
+    sha = hashlib.sha256(txt.encode("utf-8")).hexdigest()
+
+    # keccak256
+    k = keccak.new(digest_bits=256)
+    k.update(txt.encode("utf-8"))
+    keccak_digest = k.hexdigest()
+
+    return HashResponse(sha256=sha, keccak=keccak_digest)
 
