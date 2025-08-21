@@ -6,6 +6,7 @@ from enum import Enum
 from typing import List, Optional
 import glob
 from Crypto.Hash import keccak  
+from datetime import datetime
 
 
 app = FastAPI(title="Verity Backend", version="0.2.0")
@@ -262,14 +263,36 @@ def hash_text(payload: HashRequest):
 
     return HashResponse(sha256=sha, keccak=keccak_digest)
 
-# ---------- SUMMARY ENDPOINT (skeleton) ----------
+
+def _stamp_from_filename(path: str) -> str | None:
+    """Extract YYYYMMDDTHHMMSSZ from the start of filename."""
+    name = os.path.basename(path)
+    stamp = name.split("_", 1)[0]
+    return stamp if len(stamp) == 16 and stamp.endswith("Z") else None
+
+def _stamp_to_isoz(stamp: str) -> str:
+    """Convert YYYYMMDDTHHMMSSZ -> ISO8601 with 'Z'."""
+    dt = datetime.strptime(stamp, "%Y%m%dT%H%M%SZ")
+    return dt.isoformat() + "Z"
+
+# ---------- SUMMARY ENDPOINT ----------
+    
 @app.get("/summary")
 def get_summary(session_id: str):
-    # Phase 1: skeleton, return placeholder
+    files = _response_files_for_session(session_id)
+    stamps = [s for s in (_stamp_from_filename(p) for p in files) if s]
+    first_ts = _stamp_to_isoz(min(stamps)) if stamps else None
+    last_ts  = _stamp_to_isoz(max(stamps)) if stamps else None
     return {
         "session_id": session_id,
-        "responses_count": 0,
-        "first_ts": None,
-        "last_ts": None
+        "responses_count": len(files),
+        "first_ts": first_ts,
+        "last_ts": last_ts,
     }
 
+
+
+def _response_files_for_session(session_id: str) -> list[str]:
+    """Return list of response JSON file paths for a given session_id."""
+    pattern = os.path.join(RESPONSES_DIR, f"*_{session_id}_*.json")
+    return sorted(glob.glob(pattern))
