@@ -30,6 +30,13 @@ SID=$(curl -s http://localhost:8000/session \
   | python -c 'import sys,json; print(json.load(sys.stdin)["session_id"])')
 curl -s "http://localhost:8000/script?session_id=$SID" \
   | python -c 'import sys,json; d=json.load(sys.stdin); print(d["session_id"]); print(d["steps"][0]["id"])'
+  - `POST /hash` → body `{ "text": "..." }`, returns `{ sha256, keccak }`.
+  - 400 when `text` is empty/whitespace.
+
+### Quick test
+curl -s http://localhost:8000/hash -H "content-type: application/json" -d '{"text":"hello"}'
+curl -s http://localhost:8000/hash -H "content-type: application/json" -d '{"text":"   "}'
+
 
 
 - Swagger UI: http://localhost:8000/docs
