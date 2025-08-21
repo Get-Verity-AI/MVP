@@ -72,6 +72,7 @@ def store_response(payload: ResponsePayload):
     stamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     fname = f"{stamp}_{payload.session_id}_{payload.respondent_id}_{digest[:12]}.json"
     path = os.path.join(RESPONSES_DIR, fname)
+   
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(
@@ -86,3 +87,9 @@ def store_response(payload: ResponsePayload):
         )
 
     return {"ok": True, "hash": digest, "file": fname}
+# --- alias (singular) -------------------------------------------------------
+
+@app.post("/response")
+def store_response_alias(payload: ResponsePayload):
+    """Backward-compat alias for /responses."""
+    return store_response(payload)
