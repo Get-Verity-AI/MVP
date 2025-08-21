@@ -1,3 +1,4 @@
+from typing import Any, Dict
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -8,6 +9,7 @@ import glob
 
 
 app = FastAPI(title="Verity Backend", version="0.2.0")
+
 
 # --- storage layout ---------------------------------------------------------
 ROOT_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
@@ -70,6 +72,10 @@ def create_session(payload: SessionCreate):
 # --- responses --------------------------------------------------------------
 @app.post("/responses")
 def store_response(payload: ResponsePayload):
+    # Validate answers is a non-empty JSON object
+    if not isinstance(payload.answers, dict) or not payload.answers:
+        raise HTTPException(status_code=400, detail="answers must be a non-empty object")
+    
     # Serialize with sorted keys → stable hash
     serialized = json.dumps(payload.model_dump(), sort_keys=True).encode("utf-8")
     digest = hashlib.sha256(serialized).hexdigest()
