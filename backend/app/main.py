@@ -236,3 +236,17 @@ def get_script(session_id: str):
     founder_inputs = _load_session_founder_inputs(session_id)
     return _build_script(founder_inputs, session_id=session_id)
 
+# ---------- HASH ENDPOINT (skeleton) ----------
+class HashRequest(BaseModel):
+    text: str
+
+class HashResponse(BaseModel):
+    sha256: str
+    keccak: str
+
+@app.post("/hash", response_model=HashResponse)
+def hash_text(payload: HashRequest):
+    # Phase 1: skeleton implementation
+    return HashResponse(sha256="TODO", keccak="TODO")
+
+
