@@ -6,7 +6,7 @@ from enum import Enum
 from typing import List, Optional
 import glob
 from Crypto.Hash import keccak  
-from datetime import datetime
+
 
 
 app = FastAPI(title="Verity Backend", version="0.2.0")
