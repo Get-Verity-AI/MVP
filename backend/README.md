@@ -19,6 +19,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `POST /responses` → body `{ session_id, respondent_id, answers{}, meta? }`  
   saves `backend/data/responses/*.json`
 - `POST /response` → alias to `/responses` (same payload)
+- `GET /script?session_id=...` → returns interview steps[] for the given session
+
 
 - Swagger UI: http://localhost:8000/docs
 
