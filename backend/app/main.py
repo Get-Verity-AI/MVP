@@ -5,11 +5,22 @@ import hashlib, json, os, uuid
 from enum import Enum
 from typing import List, Optional
 import glob
+from fastapi.middleware.cors import CORSMiddleware
 from Crypto.Hash import keccak  
 
 
 
 app = FastAPI(title="Verity Backend", version="0.2.0")
+
+
+import os
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","),  # e.g. http://localhost:5173
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
 
 
 # --- storage layout ---------------------------------------------------------
@@ -296,3 +307,12 @@ def _response_files_for_session(session_id: str) -> list[str]:
     """Return list of response JSON file paths for a given session_id."""
     pattern = os.path.join(RESPONSES_DIR, f"*_{session_id}_*.json")
     return sorted(glob.glob(pattern))
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","),  # e.g. http://localhost:5174
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
