@@ -20,6 +20,16 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
   saves `backend/data/responses/*.json`
 - `POST /response` → alias to `/responses` (same payload)
 - `GET /script?session_id=...` → returns interview steps[] for the given session
+- `GET /script?session_id=...` → returns interview steps[] for the session
+- `POST /responses` → rejects empty `answers` with 400
+
+### Quick test (no jq)
+SID=$(curl -s http://localhost:8000/session \
+  -H "content-type: application/json" \
+  -d '{"founder_inputs":{"idea_summary":"AI interview assistant","target_user":"founders","problems":["interviews"],"value_prop":"LLM interviewer","target_action":"sign up"}}' \
+  | python -c 'import sys,json; print(json.load(sys.stdin)["session_id"])')
+curl -s "http://localhost:8000/script?session_id=$SID" \
+  | python -c 'import sys,json; d=json.load(sys.stdin); print(d["session_id"]); print(d["steps"][0]["id"])'
 
 
 - Swagger UI: http://localhost:8000/docs
