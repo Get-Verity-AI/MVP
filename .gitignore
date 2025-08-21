@@ -7,3 +7,4 @@
 "dist/" 
 ".env" 
 next-env.d.ts
+backend/data/
