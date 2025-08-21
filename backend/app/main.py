@@ -232,9 +232,8 @@ def _build_script(founder_inputs: dict, session_id: str) -> Script:
 # ---------- /script ENDPOINT ----------
 @app.get("/script", response_model=Script)
 def get_script(session_id: str):
-    """
-    Returns the interview script for the given session_id.
-    Requires that POST /session was called earlier (file lives under data/sessions/*_<session_id>.json).
-    """
+    if not session_id or not str(session_id).strip():
+        raise HTTPException(status_code=400, detail="session_id is required")
     founder_inputs = _load_session_founder_inputs(session_id)
     return _build_script(founder_inputs, session_id=session_id)
+
