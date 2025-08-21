@@ -262,3 +262,14 @@ def hash_text(payload: HashRequest):
 
     return HashResponse(sha256=sha, keccak=keccak_digest)
 
+# ---------- SUMMARY ENDPOINT (skeleton) ----------
+@app.get("/summary")
+def get_summary(session_id: str):
+    # Phase 1: skeleton, return placeholder
+    return {
+        "session_id": session_id,
+        "responses_count": 0,
+        "first_ts": None,
+        "last_ts": None
+    }
+
