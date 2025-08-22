@@ -6,14 +6,20 @@ from enum import Enum
 from typing import List, Optional
 import glob
 from fastapi.middleware.cors import CORSMiddleware
-from Crypto.Hash import keccak  
+from Crypto.Hash import keccak
+from supabase import create_client, Client
+from dotenv import load_dotenv
 
-
-
+# -----------------------------------------------------------------------------
+# App & CORS
+# -----------------------------------------------------------------------------
 app = FastAPI(title="Verity Backend", version="0.2.0")
 
+load_dotenv()
+SB_URL = os.getenv("SUPABASE_URL")
+SB_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+sb: Client | None = create_client(SB_URL, SB_KEY) if (SB_URL and SB_KEY) else None
 
-import os
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","),  # e.g. http://localhost:5173
@@ -22,22 +28,43 @@ app.add_middleware(
     allow_credentials=True,
 )
 
-
-# --- storage layout ---------------------------------------------------------
+# -----------------------------------------------------------------------------
+# File storage layout (legacy/file mode)
+# -----------------------------------------------------------------------------
 ROOT_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 SESSIONS_DIR = os.path.join(ROOT_DIR, "sessions")
 RESPONSES_DIR = os.path.join(ROOT_DIR, "responses")
 os.makedirs(SESSIONS_DIR, exist_ok=True)
 os.makedirs(RESPONSES_DIR, exist_ok=True)
 
-# --- schemas ----------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Models — Streamlit-parity (Supabase flow)
+# -----------------------------------------------------------------------------
+class FounderInputsStreamlit(BaseModel):
+    email: str
+    problem_domain: Optional[str] = None
+    problems: List[str] = []                # stored as JSON string in founder_inputs.problems (TEXT column)
+    value_prop: Optional[str] = None
+    target_action: Optional[str] = None
+    follow_up_action: Optional[str] = None
+    is_paid_service: bool = False
+    pricing_model: Optional[str] = None
+    price_points: List[float] = []          # jsonb
+    pricing_questions: List[str] = []       # jsonb
+
+class CreateSessionRespV2(BaseModel):
+    session_id: str
+    share_link: str
+
+# -----------------------------------------------------------------------------
+# Models — File-mode (legacy) to keep your existing miniapp working
+# -----------------------------------------------------------------------------
 class FounderInputs(BaseModel):
-    # keep this minimal for MVP; expand later
     idea_summary: str
     target_user: str
-    problems: list[str] = Field(..., min_items=1)
-    value_prop: str | None = None
-    target_action: str | None = None
+    problems: List[str] = Field(..., min_items=1)
+    value_prop: Optional[str] = None
+    target_action: Optional[str] = None
 
 class SessionCreate(BaseModel):
     founder_inputs: FounderInputs
@@ -51,19 +78,22 @@ class ResponsePayload(BaseModel):
     answers: dict = Field(..., description="Arbitrary answer map")
     meta: dict | None = None
 
-# --- health -----------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Health & Root
+# -----------------------------------------------------------------------------
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "verity-backend", "time": datetime.utcnow().isoformat()}
 
-# --- root -------------------------------------------------------------------
 @app.get("/")
 def root():
     return {"message": "Verity Backend is running. See /docs for API spec."}
 
-# --- sessions ---------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# File-mode: create session (legacy)
+# -----------------------------------------------------------------------------
 @app.post("/session", response_model=SessionCreateResp)
-def create_session(payload: SessionCreate):
+def create_session_file(payload: SessionCreate):
     sid = str(uuid.uuid4())
     stamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     path = os.path.join(SESSIONS_DIR, f"{stamp}_{sid}.json")
@@ -81,20 +111,21 @@ def create_session(payload: SessionCreate):
         )
     return {"session_id": sid}
 
-# --- responses --------------------------------------------------------------
-@app.post("/responses")
-def store_response(payload: ResponsePayload):
+# -----------------------------------------------------------------------------
+# File-mode: store responses (legacy)
+# -----------------------------------------------------------------------------
+@app.post("/responses_file")
+def store_response_file(payload: ResponsePayload):
     # Validate answers is a non-empty JSON object
     if not isinstance(payload.answers, dict) or not payload.answers:
         raise HTTPException(status_code=400, detail="answers must be a non-empty object")
-    
+
     # Serialize with sorted keys → stable hash
     serialized = json.dumps(payload.model_dump(), sort_keys=True).encode("utf-8")
     digest = hashlib.sha256(serialized).hexdigest()
     stamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     fname = f"{stamp}_{payload.session_id}_{payload.respondent_id}_{digest[:12]}.json"
     path = os.path.join(RESPONSES_DIR, fname)
-   
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(
@@ -109,13 +140,15 @@ def store_response(payload: ResponsePayload):
         )
 
     return {"ok": True, "hash": digest, "file": fname}
-# --- alias (singular) -------------------------------------------------------
 
+# Keep the old alias pointing to file-mode for backward compatibility
 @app.post("/response")
 def store_response_alias(payload: ResponsePayload):
-    """Backward-compat alias for /responses."""
-    return store_response(payload)
-# ---------- SCRIPT MODELS ----------
+    return store_response_file(payload)
+
+# -----------------------------------------------------------------------------
+# Script models & file-mode script generator (used by /script)
+# -----------------------------------------------------------------------------
 class StepType(str, Enum):
     text = "text"            # read-only message
     input_text = "input_text"
@@ -150,6 +183,7 @@ def _load_session_founder_inputs(session_id: str) -> dict:
     with open(matches[0], "r", encoding="utf-8") as f:
         data = json.load(f)
     return data.get("founder_inputs", {})
+
 def _build_script(founder_inputs: dict, session_id: str) -> Script:
     domain = founder_inputs.get("problem_domain") or founder_inputs.get("idea_summary") or "this space"
     value_prop = founder_inputs.get("value_prop") or "a product that solves the problem"
@@ -241,7 +275,7 @@ def _build_script(founder_inputs: dict, session_id: str) -> Script:
         target_action=target_action,
         steps=steps,
     )
-# ---------- /script ENDPOINT ----------
+
 @app.get("/script", response_model=Script)
 def get_script(session_id: str):
     if not session_id or not str(session_id).strip():
@@ -249,7 +283,9 @@ def get_script(session_id: str):
     founder_inputs = _load_session_founder_inputs(session_id)
     return _build_script(founder_inputs, session_id=session_id)
 
-# ---------- HASH ENDPOINT (skeleton) ----------
+# -----------------------------------------------------------------------------
+# Hash endpoint
+# -----------------------------------------------------------------------------
 class HashRequest(BaseModel):
     text: str
 
@@ -257,24 +293,22 @@ class HashResponse(BaseModel):
     sha256: str
     keccak: str
 
-
 @app.post("/hash", response_model=HashResponse)
 def hash_text(payload: HashRequest):
     txt = payload.text.strip()
     if not txt:
         raise HTTPException(status_code=400, detail="text cannot be empty")
 
-    # sha256
     sha = hashlib.sha256(txt.encode("utf-8")).hexdigest()
-
-    # keccak256
     k = keccak.new(digest_bits=256)
     k.update(txt.encode("utf-8"))
     keccak_digest = k.hexdigest()
 
     return HashResponse(sha256=sha, keccak=keccak_digest)
 
-
+# -----------------------------------------------------------------------------
+# File-mode summary (legacy)
+# -----------------------------------------------------------------------------
 def _stamp_from_filename(path: str) -> str | None:
     """Extract leading YYYYMMDDTHHMMSSZ from a response filename."""
     name = os.path.basename(path)
@@ -286,10 +320,13 @@ def _stamp_to_isoz(stamp: str) -> str:
     dt = datetime.strptime(stamp, "%Y%m%dT%H%M%SZ")
     return dt.isoformat() + "Z"
 
-# ---------- SUMMARY ENDPOINT ----------
-# ---------- SUMMARY ENDPOINT ----------
+def _response_files_for_session(session_id: str) -> list[str]:
+    """Return list of response JSON file paths for a given session_id."""
+    pattern = os.path.join(RESPONSES_DIR, f"*_{session_id}_*.json")
+    return sorted(glob.glob(pattern))
+
 @app.get("/summary")
-def get_summary(session_id: str):
+def get_summary_filemode(session_id: str):
     if not session_id or not str(session_id).strip():
         raise HTTPException(status_code=400, detail="session_id is required")
     files = _response_files_for_session(session_id)
@@ -303,16 +340,181 @@ def get_summary(session_id: str):
         "last_ts": last_ts,
     }
 
-def _response_files_for_session(session_id: str) -> list[str]:
-    """Return list of response JSON file paths for a given session_id."""
-    pattern = os.path.join(RESPONSES_DIR, f"*_{session_id}_*.json")
-    return sorted(glob.glob(pattern))
+# -----------------------------------------------------------------------------
+# Supabase helpers
+# -----------------------------------------------------------------------------
+def _ensure_sb():
+    if sb is None:
+        raise HTTPException(500, "Supabase is not configured (missing SUPABASE_URL/KEY)")
 
+def _ensure_founder(email: str):
+    _ensure_sb()
+    sb.table("founders").upsert(
+        {"email": email, "password_hash": "telegram"},  # placeholder to satisfy schema
+        on_conflict="email",
+    ).execute()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","),  # e.g. http://localhost:5174
-    allow_methods=["*"],
-    allow_headers=["*"],
-    allow_credentials=True,
-)
+def _upsert_founder_inputs(fi: FounderInputsStreamlit) -> str:
+    _ensure_sb()
+    sb.table("founder_inputs").upsert({
+        "founder_email": fi.email,
+        "problem_domain": fi.problem_domain,
+        "problems": json.dumps(fi.problems),  # TEXT column (JSON string)
+        "value_prop": fi.value_prop,
+        "target_action": fi.target_action,
+        "follow_up_action": fi.follow_up_action,
+        "is_paid_service": fi.is_paid_service,
+        "pricing_model": fi.pricing_model,
+        "price_points": fi.price_points,            # jsonb
+        "pricing_questions": fi.pricing_questions,  # jsonb
+    }, on_conflict="founder_email").execute()
+
+    row = sb.table("founder_inputs").select("id").eq("founder_email", fi.email).single().execute()
+    return row.data["id"]
+
+def _deterministic_steps(fi_row: dict) -> List[dict]:
+    problems = []
+    try:
+        problems = json.loads(fi_row.get("problems") or "[]")
+    except Exception:
+        pass
+
+    steps: List[dict] = [
+        {"type": "text", "key": "intro", "label": f"Quick chat about {fi_row.get('problem_domain') or 'your workflow'}"},
+        {"type": "input_text", "key": "context", "label": "Tell us about a recent time this came up."},
+    ]
+    if problems:
+        steps += [{"type": "text", "key": f"p{i}_head", "label": f"Problem: {p}"} for i, p in enumerate(problems, 1)]
+        steps += [{"type": "input_scale", "key": "resonance", "label": "How much does this resonate? (1-5)", "min": 1, "max": 5}]
+        steps += [{"type": "input_text", "key": "explain", "label": "Can you share a concrete example?"}]
+    steps += [
+        {"type": "text", "key": "pitch", "label": fi_row.get("value_prop") or "Proposed solution"},
+        {"type": "input_text", "key": "action_react", "label": f"Would you {fi_row.get('target_action') or 'try it'}? Why/why not?"},
+        {"type": "input_email", "key": "email", "label": "If you want updates, drop your email"},
+    ]
+    return steps
+
+def _build_questions(founder_inputs_id: str) -> List[dict]:
+    _ensure_sb()
+    fi = sb.table("founder_inputs").select("*").eq("id", founder_inputs_id).single().execute().data
+    # Swap with LLM if/when desired
+    return _deterministic_steps(fi)
+
+# -----------------------------------------------------------------------------
+# Supabase: create session (Streamlit parity)
+# -----------------------------------------------------------------------------
+@app.post("/session_sb", response_model=CreateSessionRespV2)
+def create_session_sb(payload: FounderInputsStreamlit):
+    """
+    - Upsert founders + founder_inputs (by founder_email unique)
+    - Generate questions (deterministic for now)
+    - Insert into sessions with questions json
+    - Return { session_id, share_link }
+    """
+    _ensure_sb()
+    if not payload.email or "@" not in payload.email:
+        raise HTTPException(400, "valid email is required")
+
+    _ensure_founder(payload.email)
+    fi_id = _upsert_founder_inputs(payload)
+    steps = _build_questions(fi_id)
+
+    ins = sb.table("sessions").insert({
+        "founder_email": payload.email,
+        "founder_inputs_id": fi_id,
+        "questions": steps,
+        "status": "active",
+    }).execute()
+    sid = ins.data[0]["id"]
+
+    bot = os.getenv("BOT_USERNAME", "")
+    origin = os.getenv("APP_ORIGIN", "")
+    share_link = f"https://t.me/{bot}?startapp=sid_{sid}" if bot else f"{origin}/respond?sid={sid}"
+
+    return {"session_id": sid, "share_link": share_link}
+
+# -----------------------------------------------------------------------------
+# Supabase: fetch session questions (respondent UI)
+# -----------------------------------------------------------------------------
+@app.get("/session_questions")
+def session_questions(session_id: str):
+    _ensure_sb()
+    if not session_id:
+        raise HTTPException(400, "session_id is required")
+    row = sb.table("sessions").select("questions").eq("id", session_id).single().execute().data
+    if not row:
+        raise HTTPException(404, "session not found")
+    return {"session_id": session_id, "steps": row["questions"]}
+
+# -----------------------------------------------------------------------------
+# Supabase: store responses with hashes
+# -----------------------------------------------------------------------------
+class SubmitAnswersReq(BaseModel):
+    session_id: str
+    tester_email: Optional[str] = None
+    answers: dict
+
+@app.post("/responses_sb")
+def submit_responses_sb(req: SubmitAnswersReq):
+    _ensure_sb()
+    if not isinstance(req.answers, dict) or not req.answers:
+        raise HTTPException(400, detail="answers must be a non-empty object")
+
+    sess = sb.table("sessions").select("id, founder_email").eq("id", req.session_id).single().execute().data
+    if not sess:
+        raise HTTPException(404, "Session not found")
+
+    # Tester upsert (email or anonymous surrogate)
+    if req.tester_email and "@" in req.tester_email:
+        sb.table("testers").upsert(
+            {"email": req.tester_email, "password_hash": "telegram"},
+            on_conflict="email",
+        ).execute()
+        tester_row = sb.table("testers").select("id").eq("email", req.tester_email).single().execute().data
+        tester_id = tester_row["id"]
+    else:
+        anon = f"anon_{datetime.utcnow().timestamp()}@tg.local"
+        t = sb.table("testers").insert({"email": anon, "password_hash": "telegram"}).execute()
+        tester_id = t.data[0]["id"]
+
+    payload_str = json.dumps(req.answers, sort_keys=True, ensure_ascii=False)
+    sha = hashlib.sha256(payload_str.encode()).hexdigest()
+    try:
+        k = keccak.new(digest_bits=256)
+        k.update(payload_str.encode())
+        keccak_hex = k.hexdigest()
+    except Exception:
+        keccak_hex = sha  # fallback
+
+    sb.table("responses").insert({
+        "session_id": req.session_id,
+        "tester_id": tester_id,
+        "founder_email": sess["founder_email"],
+        "answers": req.answers,
+        "answer_hash": keccak_hex,
+        "payment_amount": 0,
+        "paid": False
+    }).execute()
+
+    return {"ok": True, "hashes": {"sha256": sha, "keccak": keccak_hex}}
+
+# -----------------------------------------------------------------------------
+# Supabase: summary
+# -----------------------------------------------------------------------------
+@app.get("/summary_sb")
+def summary_sb(session_id: str):
+    _ensure_sb()
+    rows = (
+        sb.table("responses")
+        .select("created_at")
+        .eq("session_id", session_id)
+        .order("created_at", desc=False)   # explicit ordering
+        .execute()
+        .data
+    )
+    if rows is None:
+        raise HTTPException(404, "session not found or no responses yet")
+    count = len(rows)
+    first_ts = rows[0]["created_at"] if count else None
+    last_ts  = rows[-1]["created_at"] if count else None
+    return {"session_id": session_id, "responses_count": count, "first_ts": first_ts, "last_ts": last_ts}
