@@ -1,0 +1,9 @@
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.4; }
+input, textarea, select, button { font: inherit; }
+label { font-weight: 600; }
+button { padding: 10px 14px; border-radius: 10px; border: 1px solid #ccc; background: #f6f6f6; cursor: pointer; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+textarea, input, select { padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
