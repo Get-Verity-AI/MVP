@@ -45,3 +45,10 @@ import type { Step } from "./lib/api";
 
 
 CORS error → enable CORSMiddleware in backend app.main.
+
+# Verity MiniApp
+
+## Run locally
+```bash
+pnpm install
+pnpm dev
