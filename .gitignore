@@ -9,3 +9,21 @@
 next-env.d.ts
 backend/data/
 backend/data/
+cat > .gitignore << 'EOF'
+# root
+.env
+.env.*
+node_modules/
+dist/
+.DS_Store
+
+# miniapp
+miniapp/.env
+miniapp/.env.*
+miniapp/node_modules/
+miniapp/dist/
+
+# backend python
+__pycache__/
+*.pyc
+EOF
