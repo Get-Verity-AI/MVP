@@ -1,4 +1,3 @@
-// miniapp/src/pages/FounderDashboard.tsx
 import { useEffect, useMemo, useState } from "react";
 import { fetchFounderSessions } from "../lib/api";
 
@@ -20,6 +19,10 @@ export default function FounderDashboard() {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // UI helpers
+  const [hideDrafts, setHideDrafts] = useState(true);
+  const [search, setSearch] = useState("");
 
   async function load() {
     if (!email || !email.includes("@")) {
@@ -44,11 +47,20 @@ export default function FounderDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const filtered = sessions.filter((s) => {
+    if (hideDrafts && (s.status || "draft").toLowerCase() === "draft") return false;
+    if (search.trim() && !s.id.includes(search.trim())) return false;
+    return true;
+  });
+
+  const bot = import.meta.env.VITE_BOT_USERNAME as string | undefined;
+
   return (
     <div className="container">
       <h1 className="title">Founder Dashboard</h1>
       <p className="muted">See all your questionnaires and responses.</p>
 
+      {/* Email loader */}
       <div className="card" style={{ marginTop: 12 }}>
         <label className="label">Founder email</label>
         <div className="row">
@@ -65,18 +77,44 @@ export default function FounderDashboard() {
         {err && <div className="error" style={{ marginTop: 8 }}>{err}</div>}
       </div>
 
+      {/* Sessions table */}
       <div className="card" style={{ marginTop: 12 }}>
-        <div className="card-header">
-          <div className="card-title">Your sessions</div>
-          <div className="card-subtitle">{sessions.length} total</div>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <div className="card-title">
+            Your sessions
+            <span className="card-subtitle" style={{ marginLeft: 8 }}>
+              {filtered.length} shown · {sessions.length} total
+            </span>
+          </div>
+
+          <label className="row" style={{ gap: 8, alignItems: "center" }}>
+            <span>Hide drafts</span>
+            <input
+              type="checkbox"
+              checked={hideDrafts}
+              onChange={(e) => setHideDrafts(e.target.checked)}
+            />
+          </label>
         </div>
 
-        {loading && <div className="muted">Loading…</div>}
-        {!loading && sessions.length === 0 && (
-          <div className="muted">No sessions yet. Create one in <code>/founder/new</code>.</div>
+        <div className="row" style={{ marginTop: 8 }}>
+          <input
+            className="input"
+            placeholder="Search session id…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ maxWidth: 260 }}
+          />
+        </div>
+
+        {loading && <div className="muted" style={{ marginTop: 8 }}>Loading…</div>}
+        {!loading && filtered.length === 0 && (
+          <div className="muted" style={{ marginTop: 8 }}>
+            No sessions match. Clear filters or create one in <code>/founder/new</code>.
+          </div>
         )}
 
-        <div className="table" style={{ marginTop: 8 }}>
+        <div className="table" style={{ marginTop: 12 }}>
           <div className="thead">
             <div>Session ID</div>
             <div>Created</div>
@@ -86,33 +124,85 @@ export default function FounderDashboard() {
             <div>Links</div>
           </div>
 
-          {sessions.map((s) => {
+          {filtered.map((s) => {
             const created = new Date(s.created_at).toLocaleString();
-            const last = s.last_response_at
-              ? new Date(s.last_response_at).toLocaleString()
-              : "—";
+            const last = s.last_response_at ? new Date(s.last_response_at).toLocaleString() : "—";
             const sid = s.id;
 
-            const preview = `/respond?sid=${sid}`;
-            const bot = import.meta.env.VITE_BOT_USERNAME;
+            // Links
+            const questionnaire = `/respond?sid=${sid}`; // public questionnaire link
+            const viewResponses = `/founder/session?sid=${sid}`; // our responses page
             const deep = bot ? `https://t.me/${bot}?startapp=sid_${sid}` : null;
-            const viewResponses = `/founder/session?sid=${sid}`;
 
             return (
               <div className="trow" key={sid}>
-                <div className="mono">{sid}</div>
+                <div className="mono" style={{ wordBreak: "break-all" }}>{sid}</div>
                 <div>{created}</div>
-                <div>{s.status || "—"}</div>
+
+                <div>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      padding: "2px 10px",
+                      borderRadius: 12,
+                      fontSize: 12,
+                      color: (s.status || "draft") === "active" ? "#0b3" : "#999",
+                      background: (s.status || "draft") === "active" ? "rgba(0,180,80,.1)" : "rgba(150,150,150,.12)",
+                      border: "1px solid rgba(255,255,255,.08)",
+                    }}
+                  >
+                    {s.status || "draft"}
+                  </span>
+                </div>
+
                 <div>{s.responses_count}</div>
                 <div>{last}</div>
-                <div className="row" style={{ gap: 8 }}>
-                  <a className="link" href={preview} target="_blank">Preview</a>
-                  {deep && (
-                    <a className="link" href={deep} target="_blank">Telegram</a>
-                  )}
-                  <a className="link" href={viewResponses} target="_blank">
-                    View responses
+
+                {/* LINKS column */}
+                <div
+                  className="links"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                    alignItems: "flex-end",
+                    minWidth: 190,
+                  }}
+                >
+                  {/* Main questionnaire button */}
+                  <a className="btn_primary" href={questionnaire} target="_blank">
+                    Questionnaire
                   </a>
+
+                  {/* Sub-row: Open + Share */}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <a className="btn_secondary" href={questionnaire} target="_blank">
+                      Open
+                    </a>
+                    <button
+                      className="btn_secondary"
+                      onClick={() =>
+                        navigator.clipboard.writeText(
+                          new URL(questionnaire, location.origin).toString()
+                        )
+                      }
+                    >
+                      Share
+                    </button>
+                  </div>
+
+                  {/* Telegram deep link */}
+                  {deep && (
+                    <a className="btn_secondary" href={deep} target="_blank">
+                      TG Verity
+                    </a>
+                  )}
+
+                  {/* View responses */}
+                  <a className="btn_secondary" href={viewResponses} target="_blank">
+                 View responses
+                     </a>
+
                 </div>
               </div>
             );
