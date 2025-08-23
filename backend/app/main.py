@@ -8,16 +8,27 @@ import glob
 from fastapi.middleware.cors import CORSMiddleware
 from Crypto.Hash import keccak
 from supabase import create_client, Client
+
+
+# --- env loading (explicit path) ---------------------------------------------
 from dotenv import load_dotenv
 
-# -----------------------------------------------------------------------------
+ENV_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env"))
+load_dotenv(dotenv_path=ENV_PATH, override=True)
+
+# ----------------------------------------------------------------------------- 
 # App & CORS
 # -----------------------------------------------------------------------------
 app = FastAPI(title="Verity Backend", version="0.2.0")
 
-load_dotenv()
+# Read env AFTER load_dotenv
 SB_URL = os.getenv("SUPABASE_URL")
 SB_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+if not (SB_URL and SB_KEY):
+    print("[env] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY at", ENV_PATH)
+
+# Supabase client (only if both present)
 sb: Client | None = create_client(SB_URL, SB_KEY) if (SB_URL and SB_KEY) else None
 
 app.add_middleware(
@@ -27,6 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=True,
 )
+
 
 # -----------------------------------------------------------------------------
 # File storage layout (legacy/file mode)
