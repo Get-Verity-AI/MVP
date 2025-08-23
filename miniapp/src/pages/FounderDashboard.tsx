@@ -1,3 +1,4 @@
+// miniapp/src/pages/FounderDashboard.tsx
 import { useEffect, useMemo, useState } from "react";
 import { fetchFounderSessions } from "../lib/api";
 
@@ -5,12 +6,18 @@ function useQuery() {
   return useMemo(() => new URLSearchParams(location.search), []);
 }
 
+type SessionRow = {
+  id: string;
+  created_at: string;
+  status: string | null;
+  responses_count: number;
+  last_response_at: string | null;
+};
+
 export default function FounderDashboard() {
   const q = useQuery();
   const [email, setEmail] = useState(q.get("email") || "");
-  const [sessions, setSessions] = useState<
-    Array<{ id: string; created_at: string; status: string | null; responses_count: number; last_response_at: string | null; }>
-  >([]);
+  const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -65,7 +72,6 @@ export default function FounderDashboard() {
         </div>
 
         {loading && <div className="muted">Loading…</div>}
-
         {!loading && sessions.length === 0 && (
           <div className="muted">No sessions yet. Create one in <code>/founder/new</code>.</div>
         )}
@@ -82,11 +88,15 @@ export default function FounderDashboard() {
 
           {sessions.map((s) => {
             const created = new Date(s.created_at).toLocaleString();
-            const last = s.last_response_at ? new Date(s.last_response_at).toLocaleString() : "—";
+            const last = s.last_response_at
+              ? new Date(s.last_response_at).toLocaleString()
+              : "—";
             const sid = s.id;
+
             const preview = `/respond?sid=${sid}`;
             const bot = import.meta.env.VITE_BOT_USERNAME;
             const deep = bot ? `https://t.me/${bot}?startapp=sid_${sid}` : null;
+            const viewResponses = `/founder/session?sid=${sid}`;
 
             return (
               <div className="trow" key={sid}>
@@ -97,7 +107,12 @@ export default function FounderDashboard() {
                 <div>{last}</div>
                 <div className="row" style={{ gap: 8 }}>
                   <a className="link" href={preview} target="_blank">Preview</a>
-                  {deep && <a className="link" href={deep} target="_blank">Telegram</a>}
+                  {deep && (
+                    <a className="link" href={deep} target="_blank">Telegram</a>
+                  )}
+                  <a className="link" href={viewResponses} target="_blank">
+                    View responses
+                  </a>
                 </div>
               </div>
             );
