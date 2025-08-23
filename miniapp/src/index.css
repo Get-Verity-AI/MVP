@@ -1,9 +1,88 @@
-:root { color-scheme: light dark; }
-* { box-sizing: border-box; }
-html, body, #root { height: 100%; margin: 0; }
-body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.4; }
-input, textarea, select, button { font: inherit; }
-label { font-weight: 600; }
-button { padding: 10px 14px; border-radius: 10px; border: 1px solid #ccc; background: #f6f6f6; cursor: pointer; }
-button:disabled { opacity: 0.6; cursor: not-allowed; }
-textarea, input, select { padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
+/* ===== Verity Theme ===== */
+:root{
+  --bg: #F7F7F6;
+  --ink: #1E1E1E;
+  --muted: #6B7280;
+
+  /* palette pulled from your board */
+  --sage:   #A7B8A1;
+  --rose:   #E6C7BB;
+  --slate:  #B9B9BD;
+  --mint:   #A6C3B3;
+  --plum:   #B9A6A7;
+
+  --card: #FFFFFF;
+  --border: #E5E7EB;
+  --radius: 16px;
+
+  --focus: #111; /* ring color */
+}
+
+/* Reset-ish */
+*{box-sizing:border-box}
+html,body,#root{height:100%}
+body{
+  margin:0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+}
+
+/* Layout helpers */
+.container{ max-width: 760px; margin: 0 auto; padding: 20px; }
+
+/* Card */
+.card{
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(0,0,0,.05);
+  padding: 20px;
+}
+
+/* Headings */
+h1{ font-size: 28px; margin: 0 0 6px 0; }
+h2{ font-size: 22px; margin: 12px 0; }
+.sub{ color: var(--muted); }
+
+/* Inputs */
+input, textarea, select{
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  outline: none;
+}
+textarea{ resize: vertical; }
+input:focus, textarea:focus, select:focus{
+  box-shadow: 0 0 0 3px rgba(0,0,0,.08);
+  border-color: var(--focus);
+}
+
+/* Form grid */
+.form{ display: grid; gap: 10px; }
+.row{ display:grid; gap:8px; }
+.help{ color: var(--muted); font-size: 13px; }
+
+/* Buttons */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  padding: 10px 16px; border-radius: 999px; border: 1px solid transparent;
+  cursor:pointer; font-weight:600; text-decoration:none;
+}
+.btn.primary{ background: var(--sage); color: #0f1a12; }
+.btn.primary:hover{ filter: brightness(0.98); }
+.btn.secondary{ background: #fff; border-color: var(--border); color: var(--ink); }
+.btn.secondary:hover{ background: #fafafa; }
+
+.actions{ display:flex; gap:10px; margin-top:12px; }
+
+/* Progress pill */
+.pill{
+  display:inline-block; padding:6px 10px; border-radius:999px;
+  background: var(--slate); color:#1b1b1b; font-size:12px;
+}
+
+/* Spacer */
+.mt8{ margin-top:8px } .mt12{ margin-top:12px } .mt16{ margin-top:16px }
