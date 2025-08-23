@@ -2,6 +2,7 @@ import axios from "axios";
 export const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
 export const api = axios.create({ baseURL: API_BASE, headers: { "content-type": "application/json" }});
 
+
 const BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
 
 export interface Step {
@@ -37,4 +38,17 @@ export async function postResponse(payload: {
     headers: { "content-type": "application/json" },
   });
   return data;
+}
+// --- Founder dashboard ---
+export async function fetchFounderSessions(founder_email: string) {
+  const { data } = await api.get("/founder_sessions", { params: { founder_email } });
+  return data as {
+    sessions: Array<{
+      id: string;
+      created_at: string;
+      status: string | null;
+      responses_count: number;
+      last_response_at: string | null;
+    }>;
+  };
 }
