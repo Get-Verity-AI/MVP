@@ -53,3 +53,26 @@ export async function fetchFounderSessions(founder_email: string) {
     }>;
   };
 }
+
+//Frontend: responses page (table with columns, click preview to open full)
+export async function fetchSessionResponses(
+  session_id: string,
+  opts?: { tester?: string; include_answers?: boolean }
+) {
+  const params: Record<string, any> = { session_id };
+  if (opts?.tester) params.tester_email = opts.tester;
+  if (opts?.include_answers) params.include_answers = true;
+  const { data } = await api.get("/session_responses", { params });
+  return data as {
+    session_id: string;
+    responses: Array<{
+      id: string;
+      created_at: string;
+      answer_hash: string;
+      tester_email?: string | null;
+      tester_handle?: string | null;
+      preview: string;
+      answers: Record<string, unknown> | null;
+    }>;
+  };
+}
