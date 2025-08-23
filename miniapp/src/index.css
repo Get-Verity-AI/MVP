@@ -91,3 +91,19 @@ button,.btn_primary,.btn_secondary,a.btn_primary,a.btn_secondary{
 
 /* tweak: helper text blocks in questions */
 .muted{color:var(--muted)}
+
+/* --- checkboxes shouldn't stretch full width --- */
+input[type="checkbox"]{
+  width: auto;
+  height: 18px;
+  display: inline-block;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* put a control and its label on one line */
+.field-inline{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
