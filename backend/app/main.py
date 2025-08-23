@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 import hashlib, json, os, uuid
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import glob
 from fastapi.middleware.cors import CORSMiddleware
 from Crypto.Hash import keccak
@@ -346,7 +346,7 @@ def get_summary_filemode(session_id: str):
 # -----------------------------------------------------------------------------
 def _ensure_sb():
     if sb is None:
-        raise HTTPException(500, "Supabase is not configured (missing SUPABASE_URL/KEY)")
+        raise HTTPException(status_code=500, detail="Supabase not configured: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in backend .env")
 
 def _ensure_founder(email: str):
     _ensure_sb()
@@ -520,3 +520,52 @@ def summary_sb(session_id: str):
     first_ts = rows[0]["created_at"] if count else None
     last_ts  = rows[-1]["created_at"] if count else None
     return {"session_id": session_id, "responses_count": count, "first_ts": first_ts, "last_ts": last_ts}
+
+# -----------------------------------------------------------------------------
+# Founders dashbord
+# -----------------------------------------------------------------------------
+
+from typing import List, Dict
+
+@app.get("/founder_sessions")
+def founder_sessions(founder_email: str):
+    _ensure_sb()
+    sess: List[Dict[str, Any]] = (
+        sb.table("sessions")
+          .select("id, created_at, status")
+          .eq("founder_email", founder_email)
+          .order("created_at", desc=True)
+          .execute()
+          .data
+        or []
+    )
+
+    if not sess:
+        return {"sessions": []}
+
+    ids = [s["id"] for s in sess]
+    resp_rows: List[Dict[str, Any]] = (
+        sb.table("responses")
+          .select("session_id, created_at")
+          .in_("session_id", ids)
+          .order("created_at", desc=True)
+          .execute()
+          .data
+        or []
+    )
+
+    counts: Dict[str, Dict[str, Any]] = {}
+    for sid in ids:
+        r = [x for x in resp_rows if x["session_id"] == sid]
+        counts[sid] = {
+            "count": len(r),
+            "last_ts": r[0]["created_at"] if r else None
+        }
+
+    for s in sess:
+        m = counts.get(s["id"], {"count": 0, "last_ts": None})
+        s["responses_count"] = m["count"]
+        s["last_response_at"] = m["last_ts"]
+
+    return {"sessions": sess}
+
