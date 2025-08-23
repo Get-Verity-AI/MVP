@@ -107,3 +107,20 @@ input[type="checkbox"]{
   align-items: center;
   gap: 10px;
 }
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th, .table td {
+  border-bottom: 1px solid #2b2b2b;
+  padding: 10px 8px;
+  text-align: left;
+}
+.code {
+  background: #111315;
+  border: 1px solid #2b2b2b;
+  border-radius: 10px;
+  padding: 12px;
+  overflow: auto;
+}
