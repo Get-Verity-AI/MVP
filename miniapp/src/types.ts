@@ -1,6 +1,7 @@
 export type FounderInputsStreamlit = {
     email: string;
     problem_domain?: string;
+    target_audience?: string;   
     problems: string[];
     value_prop?: string;
     target_action?: string;
