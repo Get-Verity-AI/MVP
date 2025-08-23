@@ -454,6 +454,7 @@ def session_questions(session_id: str):
 class SubmitAnswersReq(BaseModel):
     session_id: str
     tester_email: Optional[str] = None
+    tester_handle: Optional[str] = None  # NEW: telegram handle like @alice
     answers: dict
 
 @app.post("/responses_sb")
@@ -468,15 +469,33 @@ def submit_responses_sb(req: SubmitAnswersReq):
 
     # Tester upsert (email or anonymous surrogate)
     if req.tester_email and "@" in req.tester_email:
+        # upsert by email; update telegram_handle if provided
         sb.table("testers").upsert(
-            {"email": req.tester_email, "password_hash": "telegram"},
+            {
+                "email": req.tester_email,
+                "password_hash": "telegram",
+                "telegram_handle": req.tester_handle,
+            },
             on_conflict="email",
         ).execute()
-        tester_row = sb.table("testers").select("id").eq("email", req.tester_email).single().execute().data
+        tester_row = (
+            sb.table("testers")
+            .select("id")
+            .eq("email", req.tester_email)
+            .single()
+            .execute()
+            .data
+        )
         tester_id = tester_row["id"]
     else:
         anon = f"anon_{datetime.utcnow().timestamp()}@tg.local"
-        t = sb.table("testers").insert({"email": anon, "password_hash": "telegram"}).execute()
+        t = sb.table("testers").insert(
+            {
+                "email": anon,
+                "password_hash": "telegram",
+                "telegram_handle": req.tester_handle,
+            }
+        ).execute()
         tester_id = t.data[0]["id"]
 
     payload_str = json.dumps(req.answers, sort_keys=True, ensure_ascii=False)
@@ -569,3 +588,77 @@ def founder_sessions(founder_email: str):
 
     return {"sessions": sess}
 
+# ----------------------------------------------------------------------------- 
+# Supabase: per-session responses (for founder dashboard)
+# -----------------------------------------------------------------------------
+from typing import Dict
+from typing import Dict, List
+
+@app.get("/session_responses")
+def session_responses(
+    session_id: str,
+    include_answers: bool = False,
+    tester_email: str | None = None,
+):
+    _ensure_sb()
+    if not session_id:
+        raise HTTPException(400, "session_id is required")
+
+    tester_id_filter = None
+    if tester_email:
+        t = (
+            sb.table("testers")
+            .select("id")
+            .eq("email", tester_email)
+            .single()
+            .execute()
+            .data
+        )
+        if not t:
+            return {"session_id": session_id, "responses": []}
+        tester_id_filter = t["id"]
+
+    cols = "id, tester_id, answer_hash, created_at, answers"
+    resp_q = sb.table("responses").select(cols).eq("session_id", session_id)
+    if tester_id_filter:
+        resp_q = resp_q.eq("tester_id", tester_id_filter)
+
+    resp_rows = resp_q.order("created_at", desc=True).execute().data or []
+
+    if not resp_rows:
+        return {"session_id": session_id, "responses": []}
+
+    tester_ids = sorted({r["tester_id"] for r in resp_rows if r.get("tester_id")})
+    tmap: Dict[str, Dict[str, str | None]] = {}
+    if tester_ids:
+        trows = (
+            sb.table("testers")
+            .select("id, email, telegram_handle")
+            .in_("id", tester_ids)
+            .execute()
+            .data or []
+        )
+        tmap = {t["id"]: {"email": t["email"], "handle": t.get("telegram_handle")} for t in trows}
+
+    out: List[Dict] = []
+    for r in resp_rows:
+        ans = r.get("answers") or {}
+        # make a short preview from first 3 keys
+        preview_parts = []
+        for k, v in list(ans.items())[:3]:
+            s = str(v)
+            preview_parts.append(f"{k}={s[:40]}{'…' if len(s) > 40 else ''}")
+        preview = ", ".join(preview_parts)
+
+        ti = tmap.get(r.get("tester_id"), {})
+        out.append({
+            "id": r["id"],
+            "created_at": r["created_at"],
+            "answer_hash": r["answer_hash"],
+            "tester_email": ti.get("email"),
+            "tester_handle": ti.get("handle"),
+            "preview": preview,
+            "answers": (ans if include_answers else None),
+        })
+
+    return {"session_id": session_id, "responses": out}
