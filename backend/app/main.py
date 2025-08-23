@@ -43,6 +43,7 @@ os.makedirs(RESPONSES_DIR, exist_ok=True)
 class FounderInputsStreamlit(BaseModel):
     email: str
     problem_domain: Optional[str] = None
+    target_audience: Optional[str] = None
     problems: List[str] = []                # stored as JSON string in founder_inputs.problems (TEXT column)
     value_prop: Optional[str] = None
     target_action: Optional[str] = None
@@ -359,6 +360,7 @@ def _upsert_founder_inputs(fi: FounderInputsStreamlit) -> str:
     sb.table("founder_inputs").upsert({
         "founder_email": fi.email,
         "problem_domain": fi.problem_domain,
+        "target_audience": fi.target_audience, 
         "problems": json.dumps(fi.problems),  # TEXT column (JSON string)
         "value_prop": fi.value_prop,
         "target_action": fi.target_action,
