@@ -27,3 +27,28 @@ miniapp/dist/
 __pycache__/
 *.pyc
 EOF
+
+# envs (local only)
+.env.local
+backend/.env.backend
+miniapp/.env
+
+__pycache__/
+*.pyc
+.env
+cp backend/.env.backend.example backend/.env.backend
+cp .env.example .env.local
+cp miniapp/.env.example miniapp/.env
+
+# envs
+.env.local
+backend/.env.backend
+miniapp/.env
+
+# python
+__pycache__/
+*.pyc
+
+# node
+node_modules/
+dist/
