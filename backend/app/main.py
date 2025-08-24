@@ -464,12 +464,6 @@ def _build_questions(founder_inputs_id: str) -> List[dict]:
 # -----------------------------------------------------------------------------
 @app.post("/session_sb", response_model=CreateSessionRespV2)
 def create_session_sb(payload: FounderInputsStreamlit):
-    """
-    - Upsert founders + founder_inputs (by founder_email unique)
-    - Generate questions (deterministic for now)
-    - Insert into sessions with questions json
-    - Return { session_id, share_link }
-    """
     _ensure_sb()
     if not payload.email or "@" not in payload.email:
         raise HTTPException(400, "valid email is required")
@@ -486,10 +480,15 @@ def create_session_sb(payload: FounderInputsStreamlit):
     }).execute()
     sid = ins.data[0]["id"]
 
-    bot = os.getenv("BOT_USERNAME", "")
-    origin = os.getenv("APP_ORIGIN", "")
-    share_link = f"https://t.me/{bot}?startapp=sid_{sid}" if bot else f"{origin}/respond?sid={sid}"
+    # ✅ ALWAYS use the questionnaire web URL for share_link
+    origin = os.getenv("APP_ORIGIN", "http://localhost:5173")
+    share_link = f"{origin}/respond?sid={sid}"
 
+    # (optional) provide a Telegram deep link separately if you still want it
+    bot = os.getenv("BOT_USERNAME", "")
+    tg_deeplink = f"https://t.me/{bot}?startapp=sid_{sid}" if bot else None
+
+    # You can extend CreateSessionRespV2 to include tg_deeplink, or just ignore it.
     return {"session_id": sid, "share_link": share_link}
 
 # -----------------------------------------------------------------------------
