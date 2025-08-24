@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearchParams, Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 
 type LocState = { sid?: string; share?: string | null };
 
@@ -7,26 +7,40 @@ export default function FounderShare() {
   const { state } = useLocation() as { state?: LocState };
   const [sp] = useSearchParams();
 
-  // Allow both state and URL (so refresh works)
-  const sid = state?.sid || sp.get("sid") || "";
-  const bot = (import.meta.env as any).VITE_BOT_USERNAME || "";
+  // sid can come from router state OR from the URL (?sid=...)
+  const sid = (state?.sid || sp.get("sid") || "").toString().trim();
 
-  const tgDeep = useMemo(() => (bot && sid ? `https://t.me/${bot}?startapp=sid_${sid}` : null), [bot, sid]);
-  const preview = useMemo(() => (sid ? `/respond?sid=${sid}` : null), [sid]);
-
-  // Prefer backend-provided share link; fallback to tgDeep; fallback to origin+preview
-  const primaryShare = useMemo(() => {
-    if (state?.share) return state.share;
-    if (tgDeep) return tgDeep;
-    if (preview) return `${location.origin}${preview}`;
-    return "";
-  }, [state?.share, tgDeep, preview]);
+  // Build the questionnaire preview path and the full share URL
+  const previewPath = useMemo(() => (sid ? `/respond?sid=${sid}` : null), [sid]);
+  const shareUrl = useMemo(
+    () => (previewPath ? `${location.origin}${previewPath}` : ""),
+    [previewPath]
+  );
 
   const [copied, setCopied] = useState(false);
 
+  // Smooth scroll to top on mount
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
+
+  // Clipboard with fallback for non-secure contexts
+  async function copyShareUrl() {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = shareUrl;
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  }
 
   if (!sid) {
     return (
@@ -34,7 +48,8 @@ export default function FounderShare() {
         <div className="card">
           <h1>Missing session</h1>
           <div className="sub mt8">No session id was provided.</div>
-          <div className="actions mt16">
+          <div className="actions mt16" style={{ display: "flex", gap: 8 }}>
+            <Link className="btn_chip" to="/founder/new">Create New</Link>
             <Link className="btn_chip" to="/founder/dashboard">Open Dashboard</Link>
           </div>
         </div>
@@ -52,35 +67,19 @@ export default function FounderShare() {
 
         <div className="mt12">
           <label>Shareable link</label>
-          <input readOnly value={primaryShare} />
+          <input readOnly value={shareUrl} />
         </div>
 
-        <div className="actions mt16">
-          {preview && (
-            <a className="btn_chip" href={preview} target="_blank" rel="noreferrer">
+        <div className="actions mt16" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {previewPath && (
+            <a className="btn_chip" href={previewPath} target="_blank" rel="noreferrer">
               Preview
             </a>
           )}
 
           <button
             className={`btn_chip ${copied ? "copied" : ""}`}
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(primaryShare);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1200);
-              } catch {
-                // basic fallback if clipboard API blocked
-                const tmp = document.createElement("textarea");
-                tmp.value = primaryShare;
-                document.body.appendChild(tmp);
-                tmp.select();
-                document.execCommand("copy");
-                document.body.removeChild(tmp);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1200);
-              }
-            }}
+            onClick={copyShareUrl}
           >
             {copied ? "Copied!" : "Share"}
           </button>
