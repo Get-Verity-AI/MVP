@@ -5,10 +5,14 @@ import FounderNew from "./pages/FounderNew";
 import Respond from "./pages/Respond";
 import FounderSession from "./pages/FounderSession";
 import FounderDashboard from "./pages/FounderDashboard";
+import FounderSignup from "./pages/FounderSignup";
+import FounderIntro from "./pages/FounderIntro";
 import "./index.css";
 
 const router = createBrowserRouter([
-  { path: "/founder/new", element: <FounderNew /> },
+  { path: "/founder/signup", element: <FounderSignup /> },
+  { path: "/founder/intro",  element: <FounderIntro />  },
+  { path: "/founder/new",    element: <FounderNew />    },
   { path: "/founder/dashboard", element: <FounderDashboard /> },
   { path: "/founder/session", element: <FounderSession /> },
   { path: "/respond", element: <Respond /> },
