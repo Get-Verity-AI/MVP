@@ -67,3 +67,7 @@ miniapp/node_modules/
 backend/data/
 .env
 *.env
+
+# local envs
+miniapp/.env
+package-lock.json

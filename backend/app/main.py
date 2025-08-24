@@ -718,3 +718,68 @@ def session_responses(
         })
 
     return {"session_id": session_id, "responses": out}
+
+# ----------------------------------------------------------------------------- 
+# Wallet connection
+# -----------------------------------------------------------------------------
+from typing import Dict
+#input_wallet, choices, prices)
+
+def _deterministic_steps(fi_row: dict) -> List[dict]:
+    founder = fi_row.get("founder_display_name") or "the founder"
+    domain  = fi_row.get("problem_domain") or "this topic"
+    value   = fi_row.get("value_prop") or "a product that solves this"
+    problems = []
+    try:
+        problems = json.loads(fi_row.get("problems") or "[]")
+    except Exception:
+        pass
+    segments = fi_row.get("target_segments") or []
+
+    steps: List[dict] = [
+        {"type": "text", "key": "pre_intro",
+         "label": (f"Hi! Thank you for taking the time to help {founder}.\n"
+                   "This conversation is just between us — I’ll analyse your insights "
+                   f"alongside other responses before I share anonymous headlines with {founder}.\n"
+                   "This will shape how they spend the next months or even years and they need you to be completely honest, please.\n"
+                   "Ready to go?")},
+        {"type": "input_wallet", "key": "wallet", "label": "Account set-up — connect a wallet (optional)"},
+        {"type": "text", "key": "ctx_head",
+         "label": f"{founder} is keen to talk to you about {domain}. Can you tell us a bit about your experience with it?"},
+        {"type": "input_text", "key": "context", "label": "Tell us a bit about your experience."},
+    ]
+
+    if segments:
+        steps += [{"type": "input_choice", "key": "segment",
+                   "label": "Which of these groups do you feel you most belong to?",
+                   "options": segments}]
+
+    if problems:
+        steps += [{"type": "text", "key": f"p{i}_head", "label": f"Problem: {p}"} for i, p in enumerate(problems, 1)]
+        # 1–5 resonance
+        steps += [{"type": "input_scale", "key": "resonance",
+                   "label": "How strongly do you relate to this? (1=no care, 5=HUGE problem)",
+                   "min": 1, "max": 5}]
+        steps += [{"type": "input_text", "key": "resonance_reason",
+                   "label": "Can you tell me more about why you gave that score?"}]
+        steps += [{"type": "input_text", "key": "tried",
+                   "label": "Have you ever taken any steps to try to tackle this? How did it go?"}]
+
+    steps += [
+        {"type": "text", "key": "vp_head",
+         "label": f"Here's what {founder} is thinking of building: {value}"},
+        {"type": "input_scale", "key": "use_likelihood",
+         "label": "If delivered, how likely would you be to use it regularly (1–5, not a friend bias)?", "min": 1, "max": 5},
+        {"type": "input_scale", "key": "willing_to_pay",
+         "label": "On a scale of 1–5 how willing would you be to pay for it?", "min": 1, "max": 5},
+        {"type": "input_text", "key": "price_fair",
+         "label": "What would feel intuitively fair in terms of price?"},
+        {"type": "input_text", "key": "anything_else",
+         "label": f"Is there anything else you think {founder} should know but that you’d prefer they hear from me?"},
+        {"type": "input_choice", "key": "call_to_action",
+         "label": "Would you like to take an action now?",
+         "options": ["Yes", "No", "Maybe later"]},
+        {"type": "input_email", "key": "email", "label": "If you want updates, drop your email (optional)"},
+        {"type": "text", "key": "closing", "label": "Thank you. We really appreciate your time and honesty. 🙏"}
+    ]
+    return steps

@@ -10,7 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@near-wallet-selector/core": "^9.3.0",
+    "@near-wallet-selector/ethereum-wallets": "^9.3.0",
+    "@near-wallet-selector/here-wallet": "^9.3.0",
+    "@near-wallet-selector/meteor-wallet": "^9.3.0",
+    "@near-wallet-selector/modal-ui": "^9.3.0",
+    "@near-wallet-selector/react-hook": "^9.3.0",
     "axios": "^1.11.0",
+    "near-api-js": "^6.2.5",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.8.2"

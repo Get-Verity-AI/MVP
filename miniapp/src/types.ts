@@ -26,10 +26,13 @@ export type FounderInputsStreamlit = {
   
   
   export type Step =
-    | { type: "text"; key: string; label: string }
-    | { type: "input_text"; key: string; label: string }
-    | { type: "input_scale"; key: string; label: string; min: number; max: number }
-    | { type: "input_email"; key: string; label: string };
+  | { type: "text"; key: string; label: string }
+  | { type: "input_text"; key: string; label: string }
+  | { type: "input_email"; key: string; label: string }
+  | { type: "input_scale"; key: string; label: string; min: number; max: number }
+  | { type: "input_choice"; key: string; label: string; options: string[] }
+  | { type: "input_wallet"; key: string; label: string };  // NEW
+
   
   export type SessionQuestions = { session_id: string; steps: Step[] };
   
