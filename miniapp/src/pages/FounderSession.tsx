@@ -1,142 +1,152 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fetchSessionResponses } from "../lib/api";
 
-type Resp = {
+function useQuery() {
+  return useMemo(() => new URLSearchParams(location.search), []);
+}
+
+type RespRow = {
   id: string;
   created_at: string;
   answer_hash: string;
   tester_email?: string | null;
-  tester_handle?: string | null;
-  preview: string;
-  answers: Record<string, unknown> | null;
+  tester_handle?: string | null; // optional, if backend starts returning it
+  answers?: Record<string, unknown> | null;
+  preview?: string; // optional, your api.ts type allows it
 };
 
 export default function FounderSession() {
-  const params = new URLSearchParams(location.search);
-  const sid = params.get("sid") || "";
-  const tester = params.get("tester") || "";
+  const q = useQuery();
+  const sid = q.get("sid") || "";
 
-  const [rows, setRows] = useState<Resp[]>([]);
+  const [rows, setRows] = useState<RespRow[]>([]);
+  const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [open, setOpen] = useState<Record<string, boolean>>({}); // expand/collapse
+
+  async function load() {
+    if (!sid) {
+      setErr("Missing sid");
+      setRows([]);
+      return;
+    }
+    setErr(null);
+    setLoading(true);
+    try {
+      // ask for answers so we can preview
+      const data = await fetchSessionResponses(sid, { include_answers: true });
+      // Be defensive: compute a preview if backend didn’t provide one
+      const normalized = (data.responses || []).map((r) => ({
+        ...r,
+        preview:
+          r.preview ??
+          (() => {
+            try {
+              const s = JSON.stringify(r.answers ?? {}, null, 2);
+              return s.length > 220 ? s.slice(0, 220) + "…" : s;
+            } catch {
+              return "";
+            }
+          })(),
+      }));
+      setRows(normalized);
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || e?.message || "Failed to load responses");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    (async () => {
-      try {
-        const data = await fetchSessionResponses(sid, {
-          tester: tester || undefined,
-          include_answers: true,
-        });
-        setRows(data.responses || []);
-      } catch (e: any) {
-        setErr(e?.response?.data?.detail || e.message);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [sid, tester]);
-
-  if (!sid) return <div className="container"><div className="card">Missing sid</div></div>;
-  if (err) return <div className="container"><div className="card" style={{color:"crimson"}}>Error: {err}</div></div>;
-  if (loading) return <div className="container"><div className="card">Loading…</div></div>;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sid]);
 
   return (
     <div className="container">
-      <div className="card">
-        <h1>Responses</h1>
-        <div className="sub mt8">Session ID: <code>{sid}</code></div>
+      <h1 className="title">Session responses</h1>
+      <p className="muted mono">Session ID: {sid || "—"}</p>
 
-        <div className="mt16" style={{display:"flex", gap:8, alignItems:"center"}}>
-          <form onSubmit={(e)=>{e.preventDefault();}}>
-            <input
-              placeholder="Filter by tester email"
-              defaultValue={tester}
-              onKeyDown={(e)=>{
-                if (e.key === "Enter") {
-                  const value = (e.target as HTMLInputElement).value.trim();
-                  const url = new URL(location.href);
-                  if (value) url.searchParams.set("tester", value);
-                  else url.searchParams.delete("tester");
-                  history.replaceState({}, "", url.toString());
-                  location.reload();
-                }
-              }}
-            />
-          </form>
-          {tester && (
-            <button className="btn_secondary" onClick={()=>{
-              const url = new URL(location.href);
-              url.searchParams.delete("tester");
-              history.replaceState({}, "", url.toString());
-              location.reload();
-            }}>Clear</button>
-          )}
-        </div>
+      <div className="card" style={{ marginTop: 12 }}>
+        {err && <div className="error">{err}</div>}
+        {loading && <div className="muted">Loading…</div>}
+        {!loading && !err && rows.length === 0 && (
+          <div className="muted">No responses yet.</div>
+        )}
 
-        <div className="table mt16">
-          <div className="trow trow_head">
-            <div>Responder email</div>
-            <div>Responder TG</div>
-            <div>Verified hash</div>
-            <div>Date</div>
-            <div>Answers (preview)</div>
-            <div>Actions</div>
-          </div>
-
-          {rows.map((r) => {
-            const created = new Date(r.created_at).toLocaleString();
-            const shortHash = r.answer_hash?.slice(0, 12) + "…";
-            const onlyThis = r.tester_email
-              ? `/founder/session?sid=${encodeURIComponent(sid)}&tester=${encodeURIComponent(r.tester_email)}`
-              : undefined;
-            const isOpen = openId === r.id;
-
-            return (
-              <div key={r.id} className="trow">
-                <div>{r.tester_email || "—"}</div>
-                <div>{r.tester_handle || "—"}</div>
-                <div className="mono" title={r.answer_hash}>
-                  {shortHash}
-                </div>
-                <div className="mono">{created}</div>
-
-                <div>
-                  <a
-                    href="#"
-                    onClick={(e) => { e.preventDefault(); setOpenId(isOpen ? null : r.id); }}
-                    title="Click to view full answers"
-                  >
-                    {r.preview || "—"}
-                  </a>
-                </div>
-
-                <div className="row" style={{ gap: 8 }}>
-                  {onlyThis && <a className="link" href={onlyThis}>Only this tester</a>}
-                  <button
-                    className="btn_secondary"
-                    onClick={() => navigator.clipboard.writeText(r.answer_hash)}
-                    title="Copy hash"
-                  >
-                    Copy hash
-                  </button>
-                </div>
-
-                {isOpen && (
-                  <div className="mt8" style={{ gridColumn: "1 / -1" }}>
-                    <pre style={{ overflowX:"auto" }}>{JSON.stringify(r.answers, null, 2)}</pre>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {rows.length === 0 && (
-            <div className="trow">
-              <div style={{ gridColumn: "1 / -1" }}>No responses{tester ? ` for ${tester}` : ""}.</div>
+        {rows.length > 0 && (
+          <>
+            <div className="card-subtitle" style={{ marginBottom: 8 }}>
+              {rows.length} response{rows.length === 1 ? "" : "s"}
             </div>
-          )}
-        </div>
+
+            <div className="table">
+              <div className="thead">
+                <div>Responder email</div>
+                <div>Telegram</div>
+                <div>Verified hash</div>
+                <div>Submitted at</div>
+                <div>Actions</div>
+              </div>
+
+              {rows.map((r) => {
+                const dt = new Date(r.created_at).toLocaleString();
+                const shortHash = r.answer_hash ? `${r.answer_hash.slice(0, 10)}…` : "—";
+                const email = r.tester_email || "—";
+                const tg = r.tester_handle || "—";
+                const prettyAnswers =
+                  (() => {
+                    try {
+                      return JSON.stringify(r.answers ?? {}, null, 2);
+                    } catch {
+                      return "";
+                    }
+                  })();
+
+                return (
+                  <div className="trow" key={r.id}>
+                    <div className="mono">{email}</div>
+                    <div>{tg}</div>
+                    <div className="mono">{shortHash}</div>
+                    <div>{dt}</div>
+
+                    <div className="row" style={{ gap: 8 }}>
+                      <button
+                        className="btn_secondary"
+                        onClick={() => setOpen((o) => ({ ...o, [r.id]: !o[r.id] }))}
+                        title="Preview answers"
+                      >
+                        {open[r.id] ? "Hide answers" : "View answers"}
+                      </button>
+
+                      <a
+                        className="btn_primary"
+                        href={`data:application/json;charset=utf-8,${encodeURIComponent(
+                          prettyAnswers
+                        )}`}
+                        download={`answers_${r.id}.json`}
+                        title="Download full JSON"
+                      >
+                        Download JSON
+                      </a>
+                    </div>
+
+                    {open[r.id] && (
+                      <div className="card" style={{ marginTop: 8, gridColumn: "1 / -1" }}>
+                        <div className="muted" style={{ marginBottom: 6 }}>
+                          Preview
+                        </div>
+                        <pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>
+                          {r.preview || prettyAnswers || "(empty)"}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

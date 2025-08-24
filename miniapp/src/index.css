@@ -107,3 +107,56 @@ input[type="checkbox"]{
   align-items: center;
   gap: 10px;
 }
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th, .table td {
+  border-bottom: 1px solid #2b2b2b;
+  padding: 10px 8px;
+  text-align: left;
+}
+.code {
+  background: #111315;
+  border: 1px solid #2b2b2b;
+  border-radius: 10px;
+  padding: 12px;
+  overflow: auto;
+}
+/* Founder dashboard table layout */
+.table.sessions .thead,
+.table.sessions .trow {
+  display: grid;
+  grid-template-columns: 1.3fr 0.9fr 0.6fr 0.6fr 1fr 1.1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.badge.active  { background: #173d2b; border-color: #245c40; color: #c9f0dc; }
+.badge.draft   { background: #3a3a3a; border-color: #515151; color: #e9e9e9; }
+
+.btn_view {
+  background: #2d6cdf;
+  color: #fff;
+  border-radius: 6px;
+  padding: 6px 14px;
+  text-decoration: none;
+  font-weight: 500;
+  display: inline-block;
+  text-align: center;
+  transition: background 0.2s ease;
+}
+
+.btn_view:hover {
+  background: #2457b5;
+}
