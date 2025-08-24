@@ -1,5 +1,6 @@
+// miniapp/src/pages/FounderDashboard.tsx
 import { useEffect, useMemo, useState } from "react";
-import { buildTgDeepLink, buildBrowserPreview } from "../lib/tg";
+import { buildBrowserPreview } from "../lib/tg";
 
 const API = import.meta.env.VITE_BACKEND_URL as string;
 const BOT = (import.meta.env as any).VITE_BOT_USERNAME as string | undefined;
@@ -12,8 +13,9 @@ type SessionRow = {
   last_response_at?: string | null;
 };
 
+const normEmail = (s: string) => (s || "").trim().toLowerCase();
+
 export default function FounderDashboard() {
-  // force white page background
   useEffect(() => {
     document.body.style.background = "#ffffff";
     document.body.style.color = "#0f1115";
@@ -28,28 +30,32 @@ export default function FounderDashboard() {
   const [hideDrafts, setHideDrafts] = useState(true);
   const [q, setQ] = useState("");
   const [copiedSid, setCopiedSid] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  // bootstrap from localStorage or query param
   useEffect(() => {
-    const fromStorage = localStorage.getItem("verityFounderEmail") || "";
-    const fromQuery = new URLSearchParams(location.search).get("email") || "";
+    const fromStorage = normEmail(localStorage.getItem("verityFounderEmail") || "");
+    const fromQuery = normEmail(new URLSearchParams(location.search).get("email") || "");
     const e = fromQuery || fromStorage;
     if (e) { setEmail(e); setSignedIn(true); }
   }, []);
 
-  // load sessions
   useEffect(() => {
     if (!signedIn || !email) return;
     (async () => {
       setLoading(true);
       try {
-        const r = await fetch(`${API}/founder_sessions?founder_email=${encodeURIComponent(email)}`);
+        setErr(null);
+        const e = normEmail(email);
+        const r = await fetch(`${API}/founder_sessions?founder_email=${encodeURIComponent(e)}`);
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}));
+          throw new Error(j?.detail || `HTTP ${r.status}`);
+        }
         const j = await r.json();
         const base: SessionRow[] = j?.sessions || [];
         setSessions(base);
 
-        // Backfill counts if backend didn’t include them
-        const needCounts = base.filter(s => typeof s.responses_count !== "number");
+        const needCounts = base.filter((s) => typeof s.responses_count !== "number");
         if (needCounts.length) {
           const filled = await Promise.all(
             base.map(async (s) => {
@@ -65,8 +71,9 @@ export default function FounderDashboard() {
           );
           setSessions(filled);
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error(e);
+        setErr(e?.message || "Failed to load sessions");
         setSessions([]);
       } finally {
         setLoading(false);
@@ -91,22 +98,9 @@ export default function FounderDashboard() {
     try { return new Date(ts).toLocaleString(); } catch { return ts || "—"; }
   }
 
-  // ✅ Always copy the web questionnaire link (not Telegram)
   async function copyLink(sid: string) {
-    const link = `${location.origin}${buildBrowserPreview(sid)}`;
-    try {
-      await navigator.clipboard.writeText(link);
-    } catch {
-      // fallback for non-secure contexts
-      const ta = document.createElement("textarea");
-      ta.value = link;
-      ta.style.position = "fixed";
-      ta.style.top = "-1000px";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-    }
+    const link = location.origin + buildBrowserPreview(sid);
+    await navigator.clipboard.writeText(link);
     setCopiedSid(sid);
     setTimeout(() => setCopiedSid(null), 1200);
   }
@@ -127,8 +121,10 @@ export default function FounderDashboard() {
             <button
               className="btn_primary"
               onClick={() => {
-                if (!email.includes("@")) { alert("Enter a valid email"); return; }
-                localStorage.setItem("verityFounderEmail", email);
+                const e = normEmail(email);
+                if (!e.includes("@")) { alert("Enter a valid email"); return; }
+                localStorage.setItem("verityFounderEmail", e);
+                setEmail(e);
                 setSignedIn(true);
               }}
             >
@@ -149,13 +145,18 @@ export default function FounderDashboard() {
             <div className="sub">Signed in as <code>{email}</code></div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            {BOT && <a className="btn_primary" href={`https://t.me/${BOT}`} target="_blank" rel="noreferrer">TG Verity</a>}
+            {BOT && (
+              <a className="btn_primary" href={`https://t.me/${BOT}`} target="_blank" rel="noreferrer">
+                TG Verity
+              </a>
+            )}
             <button
               className="btn_secondary"
               onClick={() => {
                 localStorage.removeItem("verityFounderEmail");
                 setSignedIn(false);
                 setSessions([]);
+                setErr(null);
               }}
             >
               Sign out
@@ -181,6 +182,8 @@ export default function FounderDashboard() {
         <div className="mt16">
           {loading ? (
             <div className="sub">Loading…</div>
+          ) : err ? (
+            <div className="sub" style={{ color: "#b42318" }}>Error: {err}</div>
           ) : shown.length === 0 ? (
             <div className="sub">No sessions to show.</div>
           ) : (
@@ -195,8 +198,7 @@ export default function FounderDashboard() {
               </div>
 
               {shown.map((s) => {
-                const preview = buildBrowserPreview(s.id); // e.g. "/respond?sid=..."
-                const deep = buildTgDeepLink(BOT, s.id);   // optional TG button
+                const preview = buildBrowserPreview(s.id);
                 const responders = s.responses_count ?? 0;
 
                 return (
@@ -216,7 +218,11 @@ export default function FounderDashboard() {
                       >
                         {copiedSid === s.id ? "Copied!" : "Share"}
                       </button>
-                      {deep && <a className="btn_chip" href={deep} target="_blank" rel="noreferrer">TG Verity</a>}
+                      {BOT && (
+                        <a className="btn_chip" href={`https://t.me/${BOT}`} target="_blank" rel="noreferrer">
+                          TG Verity
+                        </a>
+                      )}
                     </div>
                   </div>
                 );

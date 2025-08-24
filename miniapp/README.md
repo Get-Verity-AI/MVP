@@ -52,3 +52,15 @@ CORS error → enable CORSMiddleware in backend app.main.
 ```bash
 pnpm install
 pnpm dev
+
+## Founder Wizard → Supabase mapping
+- email → founders.email / founder_inputs.founder_email
+- problem_domain → founder_inputs.problem_domain
+- problems[] → founder_inputs.problems (TEXT JSON string)
+- value_prop → founder_inputs.value_prop
+- target_action → founder_inputs.target_action
+- follow_up_action → founder_inputs.follow_up_action
+- is_paid_service → founder_inputs.is_paid_service
+- pricing_model → founder_inputs.pricing_model
+- price_points[] → founder_inputs.price_points (jsonb)
+- pricing_questions[] → founder_inputs.pricing_questions (jsonb)
