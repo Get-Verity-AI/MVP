@@ -1,17 +1,17 @@
-export const tg = (window as any).Telegram?.WebApp;
-
-export function initTg() {
-  try {
-    tg?.ready?.();
-  } catch {}
-}
-
-export function founderIdentityEmail(): string | null {
-  // For now founders type email in the wizard (backend requires it)
-  return null;
-}
-
-export function reviewerIdentity(): { tg_id?: number; username?: string } {
-  const user = tg?.initDataUnsafe?.user;
-  return { tg_id: user?.id, username: user?.username };
-}
+export function getStartSid(): string | null {
+    const w = window as any;
+    const tg = w?.Telegram?.WebApp;
+    const sp = tg?.initDataUnsafe?.start_param;
+    if (sp && typeof sp === "string" && sp.startsWith("sid_")) return sp.slice(4);
+    return null;
+  }
+  
+  export function buildTgDeepLink(botUsername: string | undefined | null, sid: string): string | null {
+    if (!botUsername) return null;
+    return `https://t.me/${botUsername}?startapp=sid_${encodeURIComponent(sid)}`;
+  }
+  
+  export function buildBrowserPreview(sid: string): string {
+    return `/respond?sid=${encodeURIComponent(sid)}`;
+  }
+  
