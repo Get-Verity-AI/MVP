@@ -1,242 +1,177 @@
-import { useEffect, useMemo, useState } from "react";
-import { fetchFounderSessions } from "../lib/api";
+import { useEffect, useState } from "react";
+import { buildTgDeepLink, buildBrowserPreview } from "../lib/tg";
 
-function useQuery() {
-  return useMemo(() => new URLSearchParams(location.search), []);
-}
+const API = import.meta.env.VITE_BACKEND_URL as string;
+const BOT = (import.meta.env as any).VITE_BOT_USERNAME as string | undefined;
 
 type SessionRow = {
   id: string;
   created_at: string;
-  status: string | null;
-  responses_count: number;
-  last_response_at: string | null;
+  status: string;
+  responses_count?: number;
+  last_response_at?: string | null;
 };
 
 export default function FounderDashboard() {
-  const q = useQuery();
-  const [email, setEmail] = useState(q.get("email") || "");
-  const [sessions, setSessions] = useState<SessionRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  // UI helpers
-  const [hideDrafts, setHideDrafts] = useState(true);
-  const [search, setSearch] = useState("");
-
-  // NEW: copied state for Share button feedback
-  const [copiedSid, setCopiedSid] = useState<string | null>(null);
-
-  async function load() {
-    if (!email || !email.includes("@")) {
-      setErr("Enter your founder email to load sessions.");
-      setSessions([]);
-      return;
-    }
-    setErr(null);
-    setLoading(true);
-    try {
-      const data = await fetchFounderSessions(email);
-      setSessions(data.sessions || []);
-    } catch (e: any) {
-      setErr(e?.response?.data?.detail || e?.message || "Failed to load sessions");
-    } finally {
-      setLoading(false);
-    }
-  }
-
+  // page background (not black)
   useEffect(() => {
-    if (email) load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    document.body.classList.add("dashboard-bg");
+    return () => document.body.classList.remove("dashboard-bg");
   }, []);
 
-  const filtered = sessions.filter((s) => {
-    if (hideDrafts && (s.status || "draft").toLowerCase() === "draft") return false;
-    if (search.trim() && !s.id.includes(search.trim())) return false;
-    return true;
-  });
+  const [email, setEmail] = useState<string>("");
+  const [signedIn, setSignedIn] = useState<boolean>(false);
+  const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [hideDrafts, setHideDrafts] = useState(true);
+  const [q, setQ] = useState("");
+  const [copiedSid, setCopiedSid] = useState<string | null>(null);
 
-  const bot = import.meta.env.VITE_BOT_USERNAME as string | undefined;
+  // bootstrap from localStorage
+  useEffect(() => {
+    const e = localStorage.getItem("verityFounderEmail") || "";
+    if (e) { setEmail(e); setSignedIn(true); }
+  }, []);
 
-  // Robust clipboard with fallback
-  async function copyToClipboard(text: string) {
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text);
-        return true;
+  useEffect(() => {
+    if (!signedIn || !email) return;
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(`${API}/founder_sessions?founder_email=${encodeURIComponent(email)}`);
+        const j = await r.json();
+        setSessions(j?.sessions || []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
       }
-    } catch {}
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-      return document.execCommand("copy");
-    } finally {
-      document.body.removeChild(ta);
-    }
+    })();
+  }, [signedIn, email]);
+
+  const shown = sessions.filter(s =>
+    (!hideDrafts || s.status !== "draft") &&
+    (!q || s.id.toLowerCase().includes(q.toLowerCase()))
+  );
+
+  function fmt(ts?: string | null) {
+    if (!ts) return "—";
+    try { return new Date(ts).toLocaleString(); } catch { return ts || "—"; }
+  }
+
+  async function copyLink(sid: string) {
+    const deep = buildTgDeepLink(BOT, sid);
+    const link = deep || (location.origin + buildBrowserPreview(sid));
+    await navigator.clipboard.writeText(link);
+    setCopiedSid(sid);
+    setTimeout(() => setCopiedSid(null), 1200);
+  }
+
+  if (!signedIn) {
+    return (
+      <div className="container">
+        <div className="card dashboard">
+          <h1>Founder Dashboard</h1>
+          <div className="sub">Sign in to see your questionnaires.</div>
+          <div className="row" style={{ maxWidth: 440 }}>
+            <label>Email</label>
+            <input
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <button
+              className="btn_primary"
+              onClick={() => {
+                if (!email.includes("@")) { alert("Enter a valid email"); return; }
+                localStorage.setItem("verityFounderEmail", email);
+                setSignedIn(true);
+              }}
+            >
+              Sign in
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="container">
-      <h1 className="title">Founder Dashboard</h1>
-      <p className="muted">See all your questionnaires and responses.</p>
-
-      {/* Email loader */}
-      <div className="card" style={{ marginTop: 12 }}>
-        <label className="label">Founder email</label>
-        <div className="row">
-          <input
-            className="input"
-            placeholder="you@company.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <button className="btn" onClick={load} disabled={loading}>
-            {loading ? "Loading…" : "Load"}
-          </button>
-        </div>
-        {err && <div className="error" style={{ marginTop: 8 }}>{err}</div>}
-      </div>
-
-      {/* Sessions table */}
-      <div className="card" style={{ marginTop: 12 }}>
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-          <div className="card-title">
-            Your sessions
-            <span className="card-subtitle" style={{ marginLeft: 8 }}>
-              {filtered.length} shown · {sessions.length} total
-            </span>
+      <div className="card dashboard">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <div>
+            <h1>Founder Dashboard</h1>
+            <div className="sub">Signed in as <code>{email}</code></div>
           </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {BOT && <a className="btn_primary" href={`https://t.me/${BOT}`} target="_blank" rel="noreferrer">TG Verity</a>}
+            <button
+              className="btn_secondary"
+              onClick={() => {
+                localStorage.removeItem("verityFounderEmail");
+                setSignedIn(false);
+                setSessions([]);
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
 
-          <label className="row" style={{ gap: 8, alignItems: "center" }}>
-            <span>Hide drafts</span>
-            <input
-              type="checkbox"
-              checked={hideDrafts}
-              onChange={(e) => setHideDrafts(e.target.checked)}
-            />
+        <div className="mt16" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <div className="sub">
+            Your sessions <strong>{shown.length}</strong> shown • <strong>{sessions.length}</strong> total
+          </div>
+          <label className="field-inline" style={{ marginLeft: 10 }}>
+            <input type="checkbox" checked={hideDrafts} onChange={(e)=>setHideDrafts(e.target.checked)} />
+            Hide drafts
           </label>
+          <div style={{ marginLeft: "auto", width: 260 }}>
+            <input placeholder="Search session id…" value={q} onChange={(e)=>setQ(e.target.value)} />
+          </div>
+          <a className="btn_secondary" href="/founder/new">Create new interview</a>
         </div>
 
-        <div className="row" style={{ marginTop: 8 }}>
-          <input
-            className="input"
-            placeholder="Search session id…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ maxWidth: 260 }}
-          />
-        </div>
-
-        {loading && <div className="muted" style={{ marginTop: 8 }}>Loading…</div>}
-        {!loading && filtered.length === 0 && (
-          <div className="muted" style={{ marginTop: 8 }}>
-            No sessions match. Clear filters or create one in <code>/founder/new</code>.
-          </div>
-        )}
-
-        <div className="table" style={{ marginTop: 12 }}>
-          <div className="thead">
-            <div>Session ID</div>
-            <div>Created</div>
-            <div>Status</div>
-            <div>Responses</div>
-            <div>Last response</div>
-            <div>Links</div>
-          </div>
-
-          {filtered.map((s) => {
-            const created = new Date(s.created_at).toLocaleString();
-            const last = s.last_response_at ? new Date(s.last_response_at).toLocaleString() : "—";
-            const sid = s.id;
-
-            // Links
-            const questionnaire = `/respond?sid=${sid}`; // public questionnaire link
-            const viewResponses = `/founder/session?sid=${sid}`; // responses page
-            const deep = bot ? `https://t.me/${bot}?startapp=sid_${sid}` : null;
-
-            return (
-              <div className="trow" key={sid}>
-                <div className="mono" style={{ wordBreak: "break-all" }}>{sid}</div>
-                <div>{created}</div>
-
-                {/* keep your green "active" pill style */}
-                <div>
-                  <span
-                    style={{
-                      display: "inline-block",
-                      padding: "2px 10px",
-                      borderRadius: 12,
-                      fontSize: 12,
-                      color: (s.status || "draft") === "active" ? "#0b3" : "#999",
-                      background: (s.status || "draft") === "active"
-                        ? "rgba(0,180,80,.1)"
-                        : "rgba(150,150,150,.12)",
-                      border: "1px solid rgba(255,255,255,.08)",
-                    }}
-                  >
-                    {s.status || "draft"}
-                  </span>
-                </div>
-
-                <div>{s.responses_count}</div>
-                <div>{last}</div>
-
-                {/* LINKS column */}
-                <div
-                  className="links"
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 6,
-                    alignItems: "flex-end",
-                    minWidth: 190,
-                  }}
-                >
-                  {/* Main questionnaire button */}
-                  <a className="btn_primary" href={questionnaire} target="_blank" rel="noreferrer">
-                    Questionnaire
-                  </a>
-
-                  {/* Sub-row: Open + Share (with robust copy + 'Copied!') */}
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <a className="btn_secondary" href={questionnaire} target="_blank" rel="noreferrer">
-                      Open
-                    </a>
-                    <button
-                      className="btn_secondary"
-                      onClick={async () => {
-                        const abs = new URL(questionnaire, location.origin).toString();
-                        const ok = await copyToClipboard(abs);
-                        setCopiedSid(ok ? sid : null);
-                        setTimeout(() => setCopiedSid(null), 1300);
-                      }}
-                      aria-label={`Copy questionnaire link for ${sid}`}
-                      title="Copy shareable link"
-                    >
-                      {copiedSid === sid ? "Copied!" : "Share"}
-                    </button>
-                  </div>
-
-                  {/* Telegram deep link */}
-                  {deep && (
-                    <a className="btn_secondary" href={deep} target="_blank" rel="noreferrer">
-                      TG Verity
-                    </a>
-                  )}
-
-                  {/* keep your View responses button (made success/green) */}
-                  <a className="btn_secondary
-                  " href={viewResponses} target="_blank" rel="noreferrer">
-                    View responses
-                  </a>
-                </div>
+        <div className="mt16">
+          {loading ? (
+            <div className="sub">Loading…</div>
+          ) : shown.length === 0 ? (
+            <div className="sub">No sessions to show.</div>
+          ) : (
+            <div className="table sessions">
+              <div className="thead" style={{ fontWeight: 600, color: "var(--muted)" }}>
+                <div>Session</div>
+                <div>Created</div>
+                <div>Status</div>
+                <div>Last response</div>
+                <div>Actions</div>
+                <div></div>
               </div>
-            );
-          })}
+
+              {shown.map((s) => {
+                const preview = buildBrowserPreview(s.id);
+                const deep = buildTgDeepLink(BOT, s.id);
+                return (
+                  <div key={s.id} className="trow">
+                    <div>{s.id}</div>
+                    <div>{fmt(s.created_at)}</div>
+                    <div><span className={`badge ${s.status === "active" ? "active" : "draft"}`}>{s.status || "—"}</span></div>
+                    <div>{fmt(s.last_response_at)}</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      <span className="pill_tag">Questionnaire</span>
+                      <a className="btn_chip" href={preview} target="_blank" rel="noreferrer">Open</a>
+                      <button className={`btn_chip ${copiedSid === s.id ? "copied" : ""}`} onClick={() => copyLink(s.id)}>
+                        {copiedSid === s.id ? "Copied!" : "Share"}
+                      </button>
+                      {deep && <a className="btn_chip" href={deep} target="_blank" rel="noreferrer">TG Verity</a>}
+                    </div>
+                    <div></div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

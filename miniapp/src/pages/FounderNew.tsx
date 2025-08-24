@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { FounderInputsStreamlit } from "../types";
 
 const API = import.meta.env.VITE_BACKEND_URL;
 
 const PRICING_MODELS = [
-  "Free - no charge",   // NEW first option
+  "Free - no charge",
   "Subscription",
   "One-time",
   "Freemium",
@@ -39,6 +39,10 @@ export default function FounderNew() {
   const founder_email = useMemo(() => sp.get("email") || "", [sp]);
   const founder_name  = useMemo(() => sp.get("name")  || "", [sp]);
 
+  useEffect(() => {
+    if (founder_email) localStorage.setItem("verityFounderEmail", founder_email);
+  }, [founder_email]);
+
   // identity
   const [displayName, setDisplayName] = useState<string>(founder_name || "");
   const [industry, setIndustry]       = useState<string>("");
@@ -58,13 +62,11 @@ export default function FounderNew() {
 
   // pricing
   const [isPaid, setIsPaid] = useState<"yes"|"no">("yes");
-  const [pricingModel, setPricingModel] = useState<string>(PRICING_MODELS[0]); // default to Free
+  const [pricingModel, setPricingModel] = useState<string>(PRICING_MODELS[0]); // default Free
   const [pricingModelConsidered, setPricingModelConsidered] = useState<string[]>([]);
   const toggleConsidered = (m:string)=> setPricingModelConsidered(a=> a.includes(m)? a.filter(x=>x!==m) : [...a,m]);
 
   const [price1, setPrice1] = useState(""); const [price2, setPrice2] = useState(""); const [price3, setPrice3] = useState("");
-
-  // treat explicit “Not paid” or “Free - no charge” as free
   const isFreeChoice = pricingModel === "Free - no charge" || isPaid === "no";
 
   // actions
@@ -78,6 +80,11 @@ export default function FounderNew() {
   // stepper
   const [step, setStep] = useState(0);
 
+  // success state
+  const [sid, setSid] = useState<string | null>(null);
+  const [share, setShare] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
   const steps: StepDef[] = [
     {
       key: "identity",
@@ -89,11 +96,11 @@ export default function FounderNew() {
           </p>
           <div className="form-section">
             <label>What name will most of your respondents know you by?</label>
-            <input className="w-full px-3 py-2 rounded-xl border" value={displayName} onChange={e=>setDisplayName(e.target.value)} />
+            <input value={displayName} onChange={e=>setDisplayName(e.target.value)} />
           </div>
           <div className="form-section">
             <label>What industry or area are you / your project focusing on?</label>
-            <input className="w-full px-3 py-2 rounded-xl border" value={industry} onChange={e=>setIndustry(e.target.value)} placeholder="e.g., insurance" />
+            <input value={industry} onChange={e=>setIndustry(e.target.value)} placeholder="e.g., insurance" />
           </div>
         </>
       ),
@@ -106,9 +113,9 @@ export default function FounderNew() {
         <>
           <p className="form-hint">Describe up to 3 key problems your target users face.</p>
           <div className="stack">
-            <div className="input-row"><input className="w-full px-3 py-2 rounded-xl border" placeholder="Problem 1" value={p1} onChange={e=>setP1(e.target.value)} /></div>
-            <div className="input-row"><input className="w-full px-3 py-2 rounded-xl border" placeholder="Problem 2 (optional)" value={p2} onChange={e=>setP2(e.target.value)} /></div>
-            <div className="input-row"><input className="w-full px-3 py-2 rounded-xl border" placeholder="Problem 3 (optional)" value={p3} onChange={e=>setP3(e.target.value)} /></div>
+            <div className="input-row"><input placeholder="Problem 1" value={p1} onChange={e=>setP1(e.target.value)} /></div>
+            <div className="input-row"><input placeholder="Problem 2 (optional)" value={p2} onChange={e=>setP2(e.target.value)} /></div>
+            <div className="input-row"><input placeholder="Problem 3 (optional)" value={p3} onChange={e=>setP3(e.target.value)} /></div>
           </div>
         </>
       ),
@@ -131,10 +138,10 @@ export default function FounderNew() {
           </div>
           <p className="form-hint">List the different groups; respondents will choose one so you can segment.</p>
           {segments.map((g,i)=>(
-            <div key={i} className="actions-row">
-              <input className="flex-1 px-3 py-2 rounded-xl border" value={g} placeholder={`Group ${i+1}`} onChange={e=>setSeg(i,e.target.value)} />
-              <button type="button" className="px-3 py-2 rounded-xl border" onClick={()=>delSeg(i)}>−</button>
-              <button type="button" className="px-3 py-2 rounded-xl border" onClick={addSeg}>＋</button>
+            <div key={i} style={{display:"flex", gap:8, marginTop:8}}>
+              <input className="flex-1" value={g} placeholder={`Group ${i+1}`} onChange={e=>setSeg(i,e.target.value)} />
+              <button type="button" className="btn_secondary" onClick={()=>delSeg(i)}>−</button>
+              <button type="button" className="btn_secondary" onClick={addSeg}>＋</button>
             </div>
           ))}
         </>
@@ -146,7 +153,6 @@ export default function FounderNew() {
       title: "What’s your pitch?",
       render: () => (
         <input
-          className="w-full px-3 py-2 rounded-xl border"
           placeholder="“We do [this] so users can unlock [value]”"
           value={pitch}
           onChange={e=>setPitch(e.target.value)}
@@ -215,25 +221,28 @@ export default function FounderNew() {
           )}
           <div className="stack">
             <div className="price-input">
-              <input className="px-3 py-2 rounded-xl border w-full"
-                     placeholder="Price Point 1"
-                     value={price1}
-                     onChange={e=>setPrice1(e.target.value)}
-                     disabled={isFreeChoice} />
+              <input
+                placeholder="Price Point 1"
+                value={price1}
+                onChange={e=>setPrice1(e.target.value)}
+                disabled={isFreeChoice}
+              />
             </div>
             <div className="price-input">
-              <input className="px-3 py-2 rounded-xl border w-full"
-                     placeholder="Price Point 2 (optional)"
-                     value={price2}
-                     onChange={e=>setPrice2(e.target.value)}
-                     disabled={isFreeChoice} />
+              <input
+                placeholder="Price Point 2 (optional)"
+                value={price2}
+                onChange={e=>setPrice2(e.target.value)}
+                disabled={isFreeChoice}
+              />
             </div>
             <div className="price-input">
-              <input className="px-3 py-2 rounded-xl border w-full"
-                     placeholder="Price Point 3 (optional)"
-                     value={price3}
-                     onChange={e=>setPrice3(e.target.value)}
-                     disabled={isFreeChoice} />
+              <input
+                placeholder="Price Point 3 (optional)"
+                value={price3}
+                onChange={e=>setPrice3(e.target.value)}
+                disabled={isFreeChoice}
+              />
             </div>
           </div>
         </>
@@ -261,7 +270,7 @@ export default function FounderNew() {
           </div>
           <div className="form-section">
             <label>Other:</label>
-            <input className="w-full px-3 py-2 rounded-xl border" value={actionOther} onChange={e=>setActionOther(e.target.value)} placeholder="Describe…" />
+            <input value={actionOther} onChange={e=>setActionOther(e.target.value)} placeholder="Describe…" />
           </div>
         </>
       ),
@@ -271,10 +280,12 @@ export default function FounderNew() {
       key: "feedback",
       title: "Feedback to the Verity team (optional)",
       render: () => (
-        <textarea className="w-full px-3 py-2 rounded-xl border min-h-[100px]"
-                  value={founderFeedback}
-                  onChange={e=>setFounderFeedback(e.target.value)}
-                  placeholder="What should we add or change?" />
+        <textarea
+          className="min-h-[100px]"
+          value={founderFeedback}
+          onChange={e=>setFounderFeedback(e.target.value)}
+          placeholder="What should we add or change?"
+        />
       ),
       valid: () => true,
       final: true
@@ -285,45 +296,34 @@ export default function FounderNew() {
   const isLast = !!cur.final;
 
   const next = () => {
-    if (!cur.valid()) {
-      alert("Please complete this step.");
-      return;
-    }
+    if (!cur.valid()) { alert("Please complete this step."); return; }
     setStep(s => Math.min(s+1, steps.length-1));
   };
-
   const back = () => setStep(s => Math.max(0, s-1));
 
   const createSession = async () => {
     const problems = [p1,p2,p3].map(s=>s.trim()).filter(Boolean);
     const price_points_raw = [price1,price2,price3].map(numberize).filter((n): n is number => n!==null);
     const target_segments = segments.map(s=> s.trim()).filter(Boolean);
-
     const actuallyPaid = !isFreeChoice;
 
     const payload: FounderInputsStreamlit = {
       email: founder_email,
       founder_display_name: displayName || null,
-
       problem_domain: industry || null,
       problems,
       value_prop: pitch || null,
-
       is_paid_service: actuallyPaid,
       pricing_model: pricingModel,
       pricing_model_considered: pricingModelConsidered,
-
       price_points: actuallyPaid ? price_points_raw : [],
       pricing_questions: [],
-
       segment_mode: segmentMode,
       target_segments,
-
       target_actions: [
         ...selectedActions,
         ...(actionOther.trim() ? [`other:${actionOther.trim()}`] : [])
       ],
-
       founder_feedback: founderFeedback || null,
     };
 
@@ -334,38 +334,82 @@ export default function FounderNew() {
     });
     const j = await r.json();
     if (j?.session_id) {
-      nav(`/founder/dashboard?email=${encodeURIComponent(founder_email)}`);
+      setSid(j.session_id);
+      setShare(j.share_link || null);
+      localStorage.setItem("verityFounderEmail", founder_email || "");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
-      alert("Failed to create session");
+      alert(j?.detail || "Failed to create session");
     }
   };
 
+  /* ---------- Success step (share panel) ---------- */
+  if (sid) {
+    const bot = (import.meta.env as any).VITE_BOT_USERNAME || "";
+    const tgDeep = bot ? `https://t.me/${bot}?startapp=sid_${sid}` : null;
+    const preview = `/respond?sid=${sid}`;
+    const dash = `/founder/dashboard`;
+
+    const primaryShare = share || tgDeep || (location.origin + preview);
+
+    return (
+      <div className="container">
+        <div className="card">
+          <h1>Interview ready to share 🎉</h1>
+          <div className="sub mt8">Cool — now you can share this questionnaire with your prospects.</div>
+
+          <div className="mt12">
+            <label>Shareable link</label>
+            <input readOnly value={primaryShare} />
+          </div>
+
+          <div className="mt16">
+            <span className="pill_tag">Questionnaire</span>
+          </div>
+
+          <div className="actions mt16">
+            <a className="btn_chip" href={preview} target="_blank" rel="noreferrer">Preview</a>
+            <button
+              className={`btn_chip ${copied ? "copied" : ""}`}
+              onClick={async () => {
+                await navigator.clipboard.writeText(primaryShare);
+                setCopied(true);
+                setTimeout(()=>setCopied(false), 1200);
+              }}
+            >
+              {copied ? "Copied!" : "Share"}
+            </button>
+            {tgDeep && <a className="btn_chip" href={tgDeep} target="_blank" rel="noreferrer">TG Verity</a>}
+            <a className="btn_chip" href={dash}>Open Dashboard</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  /* ------------------------------------------------ */
+
   return (
-    <div className="container max-w-3xl mx-auto p-6">
+    <div className="container">
       <div className="stepper-head">
-        <h1 className="text-3xl font-bold">{cur.title || "Founder Inputs"}</h1>
+        <h1>Founder Inputs</h1>
         <div className="stepper-count">Step {step+1} of {steps.length}</div>
       </div>
 
-      <div className="form-section">
-        {cur.render()}
-      </div>
+      <div className="card">
+        <h2 style={{marginBottom:12}}>{cur.title}</h2>
+        <div className="form-section">{cur.render()}</div>
 
-      <div className="stepper-btns">
-        <button onClick={back} disabled={step===0}>Back</button>
-        {!isLast ? (
-          <button className="btn_success" onClick={next}>Next</button>
-        ) : (
-          <button className="btn_success" onClick={createSession}>Create Interview Session</button>
-        )}
-        <a
-          className="btn_secondary"
-          href={`/founder/dashboard?email=${encodeURIComponent(founder_email)}`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Open Dashboard
-        </a>
+        <div className="stepper-btns">
+          <button onClick={back} disabled={step===0}>Back</button>
+          {!isLast ? (
+            <button className="btn_success" onClick={next}>Next</button>
+          ) : (
+            <button className="btn_success" onClick={createSession}>Create Interview Session</button>
+          )}
+          <a className="btn_secondary" href="/founder/dashboard">
+            Open Dashboard
+          </a>
+        </div>
       </div>
     </div>
   );
