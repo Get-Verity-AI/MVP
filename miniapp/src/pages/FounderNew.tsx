@@ -5,10 +5,10 @@ import type { FounderInputsStreamlit } from "../types";
 const API = import.meta.env.VITE_BACKEND_URL;
 const PRICING_MODELS = ["Subscription","One-time","Freemium","Usage-based","Other"];
 const ACTION_OPTIONS = [
-  { key:"join_waitlist", label:"join the product waitlist" },
-  { key:"download_app",  label:"download the app now" },
-  { key:"share_email",   label:"share email for updates" },
-  { key:"follow_x",      label:"follow on X for updates" },
+  { key:"join_waitlist", label:"Join the product waitlist" },
+  { key:"download_app",  label:"Download the app now" },
+  { key:"share_email",   label:"Share email for updates" },
+  { key:"follow_x",      label:"Follow on X for updates" },
 ];
 
 export default function FounderNew() {
@@ -48,8 +48,190 @@ export default function FounderNew() {
   const [actionOther, setActionOther] = useState("");
   const toggleAction = (k:string)=> setSelectedActions(a=> a.includes(k)? a.filter(x=>x!==k): [...a,k]);
 
-  // optional feedback
+  // feedback
   const [founderFeedback, setFounderFeedback] = useState("");
+
+  // stepper
+  const [step, setStep] = useState(0);
+
+  const steps = [
+    {
+      key: "identity",
+      title: "Founder Inputs",
+      render: () => (
+        <>
+          <p className="form-hint">Please set aside 15 minutes. The clearer your inputs, the better the insight Verity can gather for you.</p>
+          <div className="form-section">
+            <label>What name will most of your respondents know you by?</label>
+            <input className="w-full px-3 py-2 rounded-xl border" value={displayName} onChange={e=>setDisplayName(e.target.value)} />
+          </div>
+          <div className="form-section">
+            <label>What industry or area are you / your project focusing on?</label>
+            <input className="w-full px-3 py-2 rounded-xl border" value={industry} onChange={e=>setIndustry(e.target.value)} placeholder="e.g., insurance" />
+          </div>
+        </>
+      ),
+      valid: () => true
+    },
+    {
+      key: "problems",
+      title: "What specific problem(s) are you solving? (max 3)",
+      render: () => (
+        <>
+          <p className="form-hint">Describe up to 3 key problems your target users face.</p>
+          <div className="stack">
+            <div className="input-row"><input className="w-full px-3 py-2 rounded-xl border" placeholder="Problem 1" value={p1} onChange={e=>setP1(e.target.value)} /></div>
+            <div className="input-row"><input className="w-full px-3 py-2 rounded-xl border" placeholder="Problem 2 (optional)" value={p2} onChange={e=>setP2(e.target.value)} /></div>
+            <div className="input-row"><input className="w-full px-3 py-2 rounded-xl border" placeholder="Problem 3 (optional)" value={p3} onChange={e=>setP3(e.target.value)} /></div>
+          </div>
+        </>
+      ),
+      valid: () => p1.trim().length > 0
+    },
+    {
+      key: "segments",
+      title: "How many distinct target user groups will you invite?",
+      render: () => (
+        <>
+          <div className="form-section">
+            <div className="v-choice">
+              <input id="seg-one" type="radio" name="segmode" checked={segmentMode==="one"} onChange={()=>setSegmentMode("one")} />
+              <label htmlFor="seg-one">I’m focused on one user group</label>
+            </div>
+            <div className="v-choice">
+              <input id="seg-decide" type="radio" name="segmode" checked={segmentMode==="decide"} onChange={()=>setSegmentMode("decide")} />
+              <label htmlFor="seg-decide">I’m trying to decide between groups</label>
+            </div>
+          </div>
+          <p className="form-hint">List the different groups; respondents will choose one so you can segment.</p>
+          {segments.map((g,i)=>(
+            <div key={i} className="actions-row">
+              <input className="flex-1 px-3 py-2 rounded-xl border" value={g} placeholder={`Group ${i+1}`} onChange={e=>setSeg(i,e.target.value)} />
+              <button type="button" className="px-3 py-2 rounded-xl border" onClick={()=>delSeg(i)}>−</button>
+              <button type="button" className="px-3 py-2 rounded-xl border" onClick={addSeg}>＋</button>
+            </div>
+          ))}
+        </>
+      ),
+      valid: () => segments.some(s => s.trim().length>0)
+    },
+    {
+      key: "pitch",
+      title: "What’s your pitch?",
+      render: () => (
+        <input className="w-full px-3 py-2 rounded-xl border"
+               placeholder="“We do [this] so users can unlock [value]”"
+               value={pitch} onChange={e=>setPitch(e.target.value)} />
+      ),
+      valid: () => true
+    },
+    {
+      key: "pricing1",
+      title: "Pricing Information",
+      render: () => (
+        <>
+          <div className="form-section">
+            <div className="form-title">Is this a paid service?</div>
+            <div className="v-choice">
+              <input id="paid-yes" type="radio" name="ispaid" checked={isPaid==="yes"} onChange={()=>setIsPaid("yes")} />
+              <label htmlFor="paid-yes">Paid service</label>
+            </div>
+            <div className="v-choice">
+              <input id="paid-no" type="radio" name="ispaid" checked={isPaid==="no"} onChange={()=>setIsPaid("no")} />
+              <label htmlFor="paid-no">Not paid</label>
+            </div>
+          </div>
+
+          <div className="form-section">
+            <div className="form-title">What is your pricing model?</div>
+            <div className="stack">
+              {PRICING_MODELS.map(m=>(
+                <div className="v-choice" key={m}>
+                  <input id={`pm-${m}`} type="radio" name="pricing_model" checked={pricingModel===m} onChange={()=>setPricingModel(m)} />
+                  <label htmlFor={`pm-${m}`}>{m}</label>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      ),
+      valid: () => true
+    },
+    {
+      key: "pricing2",
+      title: "What pricing model are you considering?",
+      render: () => (
+        <div className="stack">
+          {PRICING_MODELS.map(m=>(
+            <div className="v-choice" key={m}>
+              <input id={`pmc-${m}`} type="checkbox"
+                     checked={pricingModelConsidered.includes(m)}
+                     onChange={()=>toggleConsidered(m)} />
+              <label htmlFor={`pmc-${m}`}>{m}</label>
+            </div>
+          ))}
+        </div>
+      ),
+      valid: () => true
+    },
+    {
+      key: "prices",
+      title: "Price Points to Test (up to 3)",
+      render: () => (
+        <div className="stack">
+          <div className="price-input"><input className="px-3 py-2 rounded-xl border w-full" placeholder="Price Point 1" value={price1} onChange={e=>setPrice1(e.target.value)} /></div>
+          <div className="price-input"><input className="px-3 py-2 rounded-xl border w-full" placeholder="Price Point 2 (optional)" value={price2} onChange={e=>setPrice2(e.target.value)} /></div>
+          <div className="price-input"><input className="px-3 py-2 rounded-xl border w-full" placeholder="Price Point 3 (optional)" value={price3} onChange={e=>setPrice3(e.target.value)} /></div>
+        </div>
+      ),
+      valid: () => numberize(price1)!==null || numberize(price2)!==null || numberize(price3)!==null
+    },
+    {
+      key: "actions",
+      title: "What action shows real interest now?",
+      render: () => (
+        <>
+          <div className="stack">
+            {ACTION_OPTIONS.map(o=>(
+              <div className="v-choice" key={o.key}>
+                <input id={`act-${o.key}`} type="checkbox"
+                       checked={selectedActions.includes(o.key)}
+                       onChange={()=>toggleAction(o.key)} />
+                <label htmlFor={`act-${o.key}`}>{o.label}</label>
+              </div>
+            ))}
+          </div>
+          <div className="form-section">
+            <label>Other:</label>
+            <input className="w-full px-3 py-2 rounded-xl border" value={actionOther} onChange={e=>setActionOther(e.target.value)} placeholder="Describe…" />
+          </div>
+        </>
+      ),
+      valid: () => selectedActions.length>0 || actionOther.trim().length>0
+    },
+    {
+      key: "feedback",
+      title: "Feedback to the Verity team (optional)",
+      render: () => (
+        <textarea className="w-full px-3 py-2 rounded-xl border min-h-[100px]"
+                  value={founderFeedback}
+                  onChange={e=>setFounderFeedback(e.target.value)}
+                  placeholder="What should we add or change?" />
+      ),
+      valid: () => true,
+      final: true
+    }
+  ];
+
+  const cur = steps[step];
+  const isLast = !!cur.final;
+
+  const next = () => {
+    if (!cur.valid()) return alert("Please complete this step.");
+    setStep(s => Math.min(s+1, steps.length-1));
+  };
+
+  const back = () => setStep(s => Math.max(0, s-1));
 
   const createSession = async () => {
     const problems = [p1,p2,p3].map(s=>s.trim()).filter(Boolean);
@@ -59,26 +241,20 @@ export default function FounderNew() {
     const payload: FounderInputsStreamlit = {
       email: founder_email,
       founder_display_name: displayName || null,
-
       problem_domain: industry || null,
       problems,
       value_prop: pitch || null,
-
       is_paid_service: isPaid === "yes",
       pricing_model: pricingModel,
       pricing_model_considered: pricingModelConsidered,
-
       price_points,
       pricing_questions: [],
-
       segment_mode: segmentMode,
       target_segments,
-
       target_actions: [
         ...selectedActions,
         ...(actionOther.trim() ? [`other:${actionOther.trim()}`] : [])
       ],
-
       founder_feedback: founderFeedback || null,
     };
 
@@ -89,7 +265,6 @@ export default function FounderNew() {
     });
     const j = await r.json();
     if (j?.session_id) {
-      // redirect straight to dashboard as requested
       nav(`/founder/dashboard?email=${encodeURIComponent(founder_email)}`);
     } else {
       alert("Failed to create session");
@@ -98,105 +273,22 @@ export default function FounderNew() {
 
   return (
     <div className="container max-w-3xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-2">Founder Inputs</h1>
-      <p className="opacity-70 mb-6">Please set aside 15 minutes. The clearer your inputs, the better the insight Verity can gather for you.</p>
-
-      {/* name */}
-      <div className="mb-4">
-        <label className="text-sm opacity-80">What name will most of your respondents know you by?</label>
-        <input className="w-full px-3 py-2 rounded-xl border" value={displayName} onChange={e=>setDisplayName(e.target.value)} />
+      <div className="stepper-head">
+        <h1 className="text-3xl font-bold">{cur.title || "Founder Inputs"}</h1>
+        <div className="stepper-count">Step {step+1} of {steps.length}</div>
       </div>
 
-      {/* industry */}
-      <div className="mb-6">
-        <label className="text-sm opacity-80">What industry or area are you / your project focusing on?</label>
-        <input className="w-full px-3 py-2 rounded-xl border" value={industry} onChange={e=>setIndustry(e.target.value)} placeholder="e.g., insurance" />
+      <div className="form-section">
+        {cur.render()}
       </div>
 
-      {/* problems */}
-      <h3 className="text-xl font-semibold mb-2">What specific problem(s) are you solving? (max 3)</h3>
-      <p className="opacity-70 mb-2">Describe up to 3 key problems your target users face.</p>
-      <div className="space-y-3 mb-6">
-        <input className="w-full px-3 py-2 rounded-xl border" placeholder="Problem 1" value={p1} onChange={e=>setP1(e.target.value)} />
-        <input className="w-full px-3 py-2 rounded-xl border" placeholder="Problem 2 (optional)" value={p2} onChange={e=>setP2(e.target.value)} />
-        <input className="w-full px-3 py-2 rounded-xl border" placeholder="Problem 3 (optional)" value={p3} onChange={e=>setP3(e.target.value)} />
-      </div>
-
-      {/* segments */}
-      <h3 className="text-xl font-semibold mb-2">How many distinct target user groups will you invite?</h3>
-      <div className="flex gap-4 mb-3">
-        <label><input type="radio" checked={segmentMode==="one"} onChange={()=>setSegmentMode("one")} /> I’m focused on one user group</label>
-        <label><input type="radio" checked={segmentMode==="decide"} onChange={()=>setSegmentMode("decide")} /> I’m trying to decide between groups</label>
-      </div>
-      <p className="opacity-70 mb-2">List the different groups; respondents will choose one so you can segment.</p>
-      {segments.map((g,i)=>(
-        <div key={i} className="flex gap-2 mb-2 items-center">
-          <input className="flex-1 px-3 py-2 rounded-xl border" value={g} placeholder={`Group ${i+1}`} onChange={e=>setSeg(i,e.target.value)} />
-          <button type="button" className="px-3 py-2 rounded-xl border" onClick={()=>delSeg(i)}>−</button>
-          <button type="button" className="px-3 py-2 rounded-xl border" onClick={addSeg}>＋</button>
-        </div>
-      ))}
-
-      {/* pitch */}
-      <h3 className="text-xl font-semibold mb-2 mt-4">What’s your pitch?</h3>
-      <input className="w-full px-3 py-2 rounded-xl border mb-6" placeholder='“We do [this] so users can unlock [value]”' value={pitch} onChange={e=>setPitch(e.target.value)} />
-
-      {/* pricing */}
-      <h3 className="text-xl font-semibold mb-2">Pricing Information</h3>
-      <div className="mb-3">
-        <label className="mr-4"><input type="radio" checked={isPaid==="yes"} onChange={()=>setIsPaid("yes")} /> Paid service</label>
-        <label><input type="radio" checked={isPaid==="no"} onChange={()=>setIsPaid("no")} /> Not paid</label>
-      </div>
-
-      <div className="mb-3">
-        <div className="text-sm opacity-80">What is your pricing model?</div>
-        <div className="flex flex-wrap gap-3 mt-2">
-          {PRICING_MODELS.map(m=>(
-            <label key={m} className="px-3 py-2 rounded-xl border cursor-pointer">
-              <input type="radio" name="pricing_model" className="mr-2" checked={pricingModel===m} onChange={()=>setPricingModel(m)} />
-              {m}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <div className="mb-6">
-        <div className="text-sm opacity-80">What pricing model are you considering?</div>
-        <div className="flex flex-wrap gap-3 mt-2">
-          {PRICING_MODELS.map(m=>(
-            <label key={m} className="px-3 py-2 rounded-xl border cursor-pointer">
-              <input type="checkbox" className="mr-2" checked={pricingModelConsidered.includes(m)} onChange={()=>toggleConsidered(m)} />
-              {m}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <h4 className="font-semibold mb-2">Price Points to Test (up to 3)</h4>
-      <div className="space-y-3 mb-6">
-        <input className="w-full px-3 py-2 rounded-xl border" placeholder="Price Point 1" value={price1} onChange={e=>setPrice1(e.target.value)} />
-        <input className="w-full px-3 py-2 rounded-xl border" placeholder="Price Point 2 (optional)" value={price2} onChange={e=>setPrice2(e.target.value)} />
-        <input className="w-full px-3 py-2 rounded-xl border" placeholder="Price Point 3 (optional)" value={price3} onChange={e=>setPrice3(e.target.value)} />
-      </div>
-
-      {/* actions */}
-      <h3 className="text-xl font-semibold mb-2">What action shows real interest now?</h3>
-      <div className="flex flex-col gap-2 mb-3">
-        {ACTION_OPTIONS.map(o=>(
-          <label key={o.key}><input type="checkbox" className="mr-2" checked={selectedActions.includes(o.key)} onChange={()=>toggleAction(o.key)} /> {o.label}</label>
-        ))}
-        <div className="flex gap-2 items-center">
-          <label className="whitespace-nowrap">Other:</label>
-          <input className="flex-1 px-3 py-2 rounded-xl border" value={actionOther} onChange={e=>setActionOther(e.target.value)} placeholder="Describe…" />
-        </div>
-      </div>
-
-      {/* feedback */}
-      <h3 className="text-xl font-semibold mb-2">Feedback to the Verity team (optional)</h3>
-      <textarea className="w-full px-3 py-2 rounded-xl border min-h-[100px]" value={founderFeedback} onChange={e=>setFounderFeedback(e.target.value)} placeholder="What should we add or change?" />
-
-      <div className="mt-6 flex gap-3">
-        <button className="btn_success" onClick={createSession}>Create Interview Session</button>
+      <div className="stepper-btns">
+        <button onClick={back} disabled={step===0}>Back</button>
+        {!isLast ? (
+          <button className="btn_success" onClick={next}>Next</button>
+        ) : (
+          <button className="btn_success" onClick={createSession}>Create Interview Session</button>
+        )}
         <a className="btn_secondary" href={`/founder/dashboard?email=${encodeURIComponent(founder_email)}`} target="_blank" rel="noreferrer">
           Open Dashboard
         </a>
