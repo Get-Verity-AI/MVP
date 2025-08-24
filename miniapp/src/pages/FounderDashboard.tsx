@@ -24,6 +24,9 @@ export default function FounderDashboard() {
   const [hideDrafts, setHideDrafts] = useState(true);
   const [search, setSearch] = useState("");
 
+  // NEW: copied state for Share button feedback
+  const [copiedSid, setCopiedSid] = useState<string | null>(null);
+
   async function load() {
     if (!email || !email.includes("@")) {
       setErr("Enter your founder email to load sessions.");
@@ -54,6 +57,27 @@ export default function FounderDashboard() {
   });
 
   const bot = import.meta.env.VITE_BOT_USERNAME as string | undefined;
+
+  // Robust clipboard with fallback
+  async function copyToClipboard(text: string) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {}
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      return document.execCommand("copy");
+    } finally {
+      document.body.removeChild(ta);
+    }
+  }
 
   return (
     <div className="container">
@@ -131,7 +155,7 @@ export default function FounderDashboard() {
 
             // Links
             const questionnaire = `/respond?sid=${sid}`; // public questionnaire link
-            const viewResponses = `/founder/session?sid=${sid}`; // our responses page
+            const viewResponses = `/founder/session?sid=${sid}`; // responses page
             const deep = bot ? `https://t.me/${bot}?startapp=sid_${sid}` : null;
 
             return (
@@ -139,6 +163,7 @@ export default function FounderDashboard() {
                 <div className="mono" style={{ wordBreak: "break-all" }}>{sid}</div>
                 <div>{created}</div>
 
+                {/* keep your green "active" pill style */}
                 <div>
                   <span
                     style={{
@@ -147,7 +172,9 @@ export default function FounderDashboard() {
                       borderRadius: 12,
                       fontSize: 12,
                       color: (s.status || "draft") === "active" ? "#0b3" : "#999",
-                      background: (s.status || "draft") === "active" ? "rgba(0,180,80,.1)" : "rgba(150,150,150,.12)",
+                      background: (s.status || "draft") === "active"
+                        ? "rgba(0,180,80,.1)"
+                        : "rgba(150,150,150,.12)",
                       border: "1px solid rgba(255,255,255,.08)",
                     }}
                   >
@@ -170,39 +197,42 @@ export default function FounderDashboard() {
                   }}
                 >
                   {/* Main questionnaire button */}
-                  <a className="btn_primary" href={questionnaire} target="_blank">
+                  <a className="btn_primary" href={questionnaire} target="_blank" rel="noreferrer">
                     Questionnaire
                   </a>
 
-                  {/* Sub-row: Open + Share */}
+                  {/* Sub-row: Open + Share (with robust copy + 'Copied!') */}
                   <div style={{ display: "flex", gap: 6 }}>
-                    <a className="btn_secondary" href={questionnaire} target="_blank">
+                    <a className="btn_secondary" href={questionnaire} target="_blank" rel="noreferrer">
                       Open
                     </a>
                     <button
                       className="btn_secondary"
-                      onClick={() =>
-                        navigator.clipboard.writeText(
-                          new URL(questionnaire, location.origin).toString()
-                        )
-                      }
+                      onClick={async () => {
+                        const abs = new URL(questionnaire, location.origin).toString();
+                        const ok = await copyToClipboard(abs);
+                        setCopiedSid(ok ? sid : null);
+                        setTimeout(() => setCopiedSid(null), 1300);
+                      }}
+                      aria-label={`Copy questionnaire link for ${sid}`}
+                      title="Copy shareable link"
                     >
-                      Share
+                      {copiedSid === sid ? "Copied!" : "Share"}
                     </button>
                   </div>
 
                   {/* Telegram deep link */}
                   {deep && (
-                    <a className="btn_secondary" href={deep} target="_blank">
+                    <a className="btn_secondary" href={deep} target="_blank" rel="noreferrer">
                       TG Verity
                     </a>
                   )}
 
-                  {/* View responses */}
-                  <a className="btn_secondary" href={viewResponses} target="_blank">
-                 View responses
-                     </a>
-
+                  {/* keep your View responses button (made success/green) */}
+                  <a className="btn_secondary
+                  " href={viewResponses} target="_blank" rel="noreferrer">
+                    View responses
+                  </a>
                 </div>
               </div>
             );
