@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import type { FounderInputsStreamlit } from "../types";
 
 const API = import.meta.env.VITE_BACKEND_URL;
@@ -36,21 +36,22 @@ const numberize = (s: string) => {
 export default function FounderNew() {
   const [sp] = useSearchParams();
   const nav = useNavigate();
-  const founder_email = useMemo(() => sp.get("email") || "", [sp]);
-  const founder_name  = useMemo(() => sp.get("name")  || "", [sp]);
 
-  useEffect(() => {
-    if (founder_email) localStorage.setItem("verityFounderEmail", founder_email);
-  }, [founder_email]);
+  // ---- email: from URL ? from localStorage ? empty
+  const emailFromUrl = useMemo(() => sp.get("email") || "", [sp]);
+  const [founderEmail, setFounderEmail] = useState<string>(
+    emailFromUrl || localStorage.getItem("verityFounderEmail") || ""
+  );
+  const emailValid = founderEmail.includes("@");
 
   // identity
-  const [displayName, setDisplayName] = useState<string>(founder_name || "");
+  const [displayName, setDisplayName] = useState<string>(sp.get("name") || "");
   const [industry, setIndustry]       = useState<string>("");
 
-  // problems (max 3)
+  // problems
   const [p1, setP1] = useState(""); const [p2, setP2] = useState(""); const [p3, setP3] = useState("");
 
-  // target groups
+  // segments
   const [segmentMode, setSegmentMode] = useState<"one"|"decide">("one");
   const [segments, setSegments] = useState<string[]>([""]);
   const setSeg = (i:number,v:string)=> setSegments(s=> s.map((x,idx)=> idx===i? v:x));
@@ -62,7 +63,7 @@ export default function FounderNew() {
 
   // pricing
   const [isPaid, setIsPaid] = useState<"yes"|"no">("yes");
-  const [pricingModel, setPricingModel] = useState<string>(PRICING_MODELS[0]); // default Free
+  const [pricingModel, setPricingModel] = useState<string>(PRICING_MODELS[0]);
   const [pricingModelConsidered, setPricingModelConsidered] = useState<string[]>([]);
   const toggleConsidered = (m:string)=> setPricingModelConsidered(a=> a.includes(m)? a.filter(x=>x!==m) : [...a,m]);
 
@@ -84,6 +85,10 @@ export default function FounderNew() {
   const [sid, setSid] = useState<string | null>(null);
   const [share, setShare] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // error state
+  const [err, setErr] = useState<string | null>(null);
+  const clearErrSoon = () => setTimeout(() => setErr(null), 2500);
 
   const steps: StepDef[] = [
     {
@@ -192,23 +197,7 @@ export default function FounderNew() {
       ),
       valid: () => true
     },
-    {
-      key: "pricing2",
-      title: "What pricing model are you considering?",
-      render: () => (
-        <div className="stack">
-          {PRICING_MODELS.map(m=>(
-            <div className="v-choice" key={m}>
-              <input id={`pmc-${m}`} type="checkbox"
-                     checked={pricingModelConsidered.includes(m)}
-                     onChange={()=>toggleConsidered(m)} />
-              <label htmlFor={`pmc-${m}`}>{m}</label>
-            </div>
-          ))}
-        </div>
-      ),
-      valid: () => true
-    },
+    
     {
       key: "prices",
       title: "Price Points to Test (up to 3)",
@@ -296,54 +285,75 @@ export default function FounderNew() {
   const isLast = !!cur.final;
 
   const next = () => {
-    if (!cur.valid()) { alert("Please complete this step."); return; }
+    setErr(null);
+    if (!cur.valid()) { setErr("Please complete this step."); clearErrSoon(); return; }
     setStep(s => Math.min(s+1, steps.length-1));
   };
-  const back = () => setStep(s => Math.max(0, s-1));
+  const back = () => { setErr(null); setStep(s => Math.max(0, s-1)); };
 
-  const createSession = async () => {
-    const problems = [p1,p2,p3].map(s=>s.trim()).filter(Boolean);
-    const price_points_raw = [price1,price2,price3].map(numberize).filter((n): n is number => n!==null);
-    const target_segments = segments.map(s=> s.trim()).filter(Boolean);
-    const actuallyPaid = !isFreeChoice;
+ // REMOVE these states at the top:
+// const [sid, setSid] = useState<string | null>(null);
+// const [share, setShare] = useState<string | null>(null);
+// const [copied, setCopied] = useState(false);
 
-    const payload: FounderInputsStreamlit = {
-      email: founder_email,
-      founder_display_name: displayName || null,
-      problem_domain: industry || null,
-      problems,
-      value_prop: pitch || null,
-      is_paid_service: actuallyPaid,
-      pricing_model: pricingModel,
-      pricing_model_considered: pricingModelConsidered,
-      price_points: actuallyPaid ? price_points_raw : [],
-      pricing_questions: [],
-      segment_mode: segmentMode,
-      target_segments,
-      target_actions: [
-        ...selectedActions,
-        ...(actionOther.trim() ? [`other:${actionOther.trim()}`] : [])
-      ],
-      founder_feedback: founderFeedback || null,
-    };
+// ... keep everything else
 
+async function createSession() {
+  setErr(null);
+  if (!emailValid) { setErr("Please enter a valid email at the top."); clearErrSoon(); return; }
+
+  const problems = [p1,p2,p3].map(s=>s.trim()).filter(Boolean);
+  const price_points_raw = [price1,price2,price3].map(numberize).filter((n): n is number => n!==null);
+  const target_segments = segments.map(s=> s.trim()).filter(Boolean);
+  const actuallyPaid = !(pricingModel === "Free - no charge" || isPaid === "no");
+
+  const payload: FounderInputsStreamlit = {
+    email: founderEmail,
+    founder_display_name: displayName || null,
+    problem_domain: industry || null,
+    problems,
+    value_prop: pitch || null,
+    is_paid_service: actuallyPaid,
+    pricing_model: pricingModel,
+    pricing_model_considered: [], // or remove if backend doesn't need it
+    price_points: actuallyPaid ? price_points_raw : [],
+    pricing_questions: [],
+    segment_mode: segmentMode,
+    target_segments,
+    target_actions: [
+      ...selectedActions,
+      ...(actionOther.trim() ? [`other:${actionOther.trim()}`] : [])
+    ],
+    founder_feedback: founderFeedback || null,
+    target_audience: null,
+    target_action: null,
+    follow_up_action: null,
+  };
+
+  try {
     const r = await fetch(`${API}/session_sb`, {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify(payload)
     });
     const j = await r.json();
-    if (j?.session_id) {
-      setSid(j.session_id);
-      setShare(j.share_link || null);
-      localStorage.setItem("verityFounderEmail", founder_email || "");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      alert(j?.detail || "Failed to create session");
-    }
-  };
+    if (!r.ok) { setErr(j?.detail || "Failed to create session"); clearErrSoon(); return; }
 
-  /* ---------- Success step (share panel) ---------- */
+    if (j?.session_id) {
+      localStorage.setItem("verityFounderEmail", founderEmail || "");
+      // 👇 redirect to the success page and pass data
+      nav("/founder/share", { state: { sid: j.session_id, share: j.share_link || null } });
+    } else {
+      setErr("Unexpected response from server.");
+      clearErrSoon();
+    }
+  } catch (e: any) {
+    setErr(e?.message || "Network error");
+    clearErrSoon();
+  }
+}
+
+  // ---------- Post-creation success panel ----------
   if (sid) {
     const bot = (import.meta.env as any).VITE_BOT_USERNAME || "";
     const tgDeep = bot ? `https://t.me/${bot}?startapp=sid_${sid}` : null;
@@ -386,10 +396,34 @@ export default function FounderNew() {
       </div>
     );
   }
-  /* ------------------------------------------------ */
+  // -------------------------------------------------
 
   return (
     <div className="container">
+      {/* small sign-in strip */}
+      <div className="card email-strip">
+        <div className="row" style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:12, alignItems:"end" }}>
+          <div>
+            <label>Founder email</label>
+            <input
+              placeholder="you@example.com"
+              value={founderEmail}
+              onChange={(e)=>setFounderEmail(e.target.value)}
+            />
+          </div>
+          <button
+            className="btn_primary"
+            onClick={()=>{
+              if (!emailValid) { setErr("Enter a valid email"); clearErrSoon(); return; }
+              localStorage.setItem("verityFounderEmail", founderEmail);
+            }}
+          >
+            Use this email
+          </button>
+        </div>
+        {!emailValid && <div className="sub" style={{color:"#b42318", marginTop:6}}>Email is required to create a session.</div>}
+      </div>
+
       <div className="stepper-head">
         <h1>Founder Inputs</h1>
         <div className="stepper-count">Step {step+1} of {steps.length}</div>
@@ -399,16 +433,18 @@ export default function FounderNew() {
         <h2 style={{marginBottom:12}}>{cur.title}</h2>
         <div className="form-section">{cur.render()}</div>
 
+        {err && <div style={{ color:"#b42318", marginTop:10 }}>{err}</div>}
+
         <div className="stepper-btns">
           <button onClick={back} disabled={step===0}>Back</button>
           {!isLast ? (
             <button className="btn_success" onClick={next}>Next</button>
           ) : (
-            <button className="btn_success" onClick={createSession}>Create Interview Session</button>
+            <button className="btn_success" onClick={createSession} disabled={!emailValid}>
+              Create Interview Session
+            </button>
           )}
-          <a className="btn_secondary" href="/founder/dashboard">
-            Open Dashboard
-          </a>
+          <a className="btn_secondary" href="/founder/dashboard">Open Dashboard</a>
         </div>
       </div>
     </div>

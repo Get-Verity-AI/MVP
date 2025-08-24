@@ -41,7 +41,7 @@ os.makedirs(RESPONSES_DIR, exist_ok=True)
 # Models — Streamlit-parity (Supabase flow)
 # -----------------------------------------------------------------------------
 class FounderInputsStreamlit(BaseModel):
-    class FounderInputsStreamlit(BaseModel):
+    
     # identity
     email: str
     founder_display_name: Optional[str] = None

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buildTgDeepLink, buildBrowserPreview } from "../lib/tg";
 
 const API = import.meta.env.VITE_BACKEND_URL as string;
@@ -8,31 +8,36 @@ type SessionRow = {
   id: string;
   created_at: string;
   status: string;
-  responses_count?: number;
+  responses_count?: number;          // may be missing -> we’ll backfill
   last_response_at?: string | null;
 };
 
 export default function FounderDashboard() {
-  // page background (not black)
+  // force white page background
   useEffect(() => {
-    document.body.classList.add("dashboard-bg");
-    return () => document.body.classList.remove("dashboard-bg");
+    document.body.style.background = "#ffffff";
+    document.body.style.color = "#0f1115";
+    return () => {};
   }, []);
 
   const [email, setEmail] = useState<string>("");
   const [signedIn, setSignedIn] = useState<boolean>(false);
+
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [hideDrafts, setHideDrafts] = useState(true);
   const [q, setQ] = useState("");
   const [copiedSid, setCopiedSid] = useState<string | null>(null);
 
-  // bootstrap from localStorage
+  // bootstrap from localStorage or query param
   useEffect(() => {
-    const e = localStorage.getItem("verityFounderEmail") || "";
+    const fromStorage = localStorage.getItem("verityFounderEmail") || "";
+    const fromQuery = new URLSearchParams(location.search).get("email") || "";
+    const e = fromQuery || fromStorage;
     if (e) { setEmail(e); setSignedIn(true); }
   }, []);
 
+  // load sessions
   useEffect(() => {
     if (!signedIn || !email) return;
     (async () => {
@@ -40,19 +45,46 @@ export default function FounderDashboard() {
       try {
         const r = await fetch(`${API}/founder_sessions?founder_email=${encodeURIComponent(email)}`);
         const j = await r.json();
-        setSessions(j?.sessions || []);
+        const base: SessionRow[] = j?.sessions || [];
+        setSessions(base);
+
+        // Backfill counts if backend didn’t include them
+        const needCounts = base.filter(s => typeof s.responses_count !== "number");
+        if (needCounts.length) {
+          const filled = await Promise.all(
+            base.map(async (s) => {
+              if (typeof s.responses_count === "number") return s;
+              try {
+                const sr = await fetch(`${API}/summary_sb?session_id=${encodeURIComponent(s.id)}`);
+                const sj = await sr.json();
+                return { ...s, responses_count: Number(sj?.responses_count ?? 0) };
+              } catch {
+                return { ...s, responses_count: 0 };
+              }
+            })
+          );
+          setSessions(filled);
+        }
       } catch (e) {
         console.error(e);
+        setSessions([]);
       } finally {
         setLoading(false);
       }
     })();
   }, [signedIn, email]);
 
-  const shown = sessions.filter(s =>
-    (!hideDrafts || s.status !== "draft") &&
-    (!q || s.id.toLowerCase().includes(q.toLowerCase()))
+  const shown = useMemo(
+    () =>
+      sessions.filter(
+        (s) =>
+          (!hideDrafts || s.status !== "draft") &&
+          (!q || s.id.toLowerCase().includes(q.toLowerCase()))
+      ),
+    [sessions, hideDrafts, q]
   );
+
+  const totalResponders = shown.reduce((sum, s) => sum + (s.responses_count ?? 0), 0);
 
   function fmt(ts?: string | null) {
     if (!ts) return "—";
@@ -70,7 +102,7 @@ export default function FounderDashboard() {
   if (!signedIn) {
     return (
       <div className="container">
-        <div className="card dashboard">
+        <div className="card">
           <h1>Founder Dashboard</h1>
           <div className="sub">Sign in to see your questionnaires.</div>
           <div className="row" style={{ maxWidth: 440 }}>
@@ -98,7 +130,7 @@ export default function FounderDashboard() {
 
   return (
     <div className="container">
-      <div className="card dashboard">
+      <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div>
             <h1>Founder Dashboard</h1>
@@ -123,6 +155,7 @@ export default function FounderDashboard() {
           <div className="sub">
             Your sessions <strong>{shown.length}</strong> shown • <strong>{sessions.length}</strong> total
           </div>
+          <div className="sub">Responders (shown): <strong>{totalResponders}</strong></div>
           <label className="field-inline" style={{ marginLeft: 10 }}>
             <input type="checkbox" checked={hideDrafts} onChange={(e)=>setHideDrafts(e.target.checked)} />
             Hide drafts
@@ -144,29 +177,35 @@ export default function FounderDashboard() {
                 <div>Session</div>
                 <div>Created</div>
                 <div>Status</div>
+                <div>Responses</div>
                 <div>Last response</div>
                 <div>Actions</div>
-                <div></div>
               </div>
 
               {shown.map((s) => {
                 const preview = buildBrowserPreview(s.id);
                 const deep = buildTgDeepLink(BOT, s.id);
+                const responders = s.responses_count ?? 0;
+
                 return (
                   <div key={s.id} className="trow">
-                    <div>{s.id}</div>
+                    <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.id}</div>
                     <div>{fmt(s.created_at)}</div>
                     <div><span className={`badge ${s.status === "active" ? "active" : "draft"}`}>{s.status || "—"}</span></div>
+                    <div><span className="resp_badge">{responders}</span></div>
                     <div>{fmt(s.last_response_at)}</div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                       <span className="pill_tag">Questionnaire</span>
                       <a className="btn_chip" href={preview} target="_blank" rel="noreferrer">Open</a>
-                      <button className={`btn_chip ${copiedSid === s.id ? "copied" : ""}`} onClick={() => copyLink(s.id)}>
+                      <button
+                        className={`btn_chip ${copiedSid === s.id ? "copied" : ""}`}
+                        onClick={() => copyLink(s.id)}
+                        title="Copy shareable link"
+                      >
                         {copiedSid === s.id ? "Copied!" : "Share"}
                       </button>
                       {deep && <a className="btn_chip" href={deep} target="_blank" rel="noreferrer">TG Verity</a>}
                     </div>
-                    <div></div>
                   </div>
                 );
               })}
