@@ -52,3 +52,18 @@ __pycache__/
 # node
 node_modules/
 dist/
+
+# ignore build & deps
+node_modules/
+miniapp/node_modules/
+backend/data/
+.env
+*.env
+
+
+# deps & local envs
+node_modules/
+miniapp/node_modules/
+backend/data/
+.env
+*.env
