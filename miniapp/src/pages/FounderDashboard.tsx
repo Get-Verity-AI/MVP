@@ -8,7 +8,7 @@ type SessionRow = {
   id: string;
   created_at: string;
   status: string;
-  responses_count?: number;          // may be missing -> we’ll backfill
+  responses_count?: number;
   last_response_at?: string | null;
 };
 
@@ -91,10 +91,22 @@ export default function FounderDashboard() {
     try { return new Date(ts).toLocaleString(); } catch { return ts || "—"; }
   }
 
+  // ✅ Always copy the web questionnaire link (not Telegram)
   async function copyLink(sid: string) {
-    const deep = buildTgDeepLink(BOT, sid);
-    const link = deep || (location.origin + buildBrowserPreview(sid));
-    await navigator.clipboard.writeText(link);
+    const link = `${location.origin}${buildBrowserPreview(sid)}`;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      // fallback for non-secure contexts
+      const ta = document.createElement("textarea");
+      ta.value = link;
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
     setCopiedSid(sid);
     setTimeout(() => setCopiedSid(null), 1200);
   }
@@ -183,8 +195,8 @@ export default function FounderDashboard() {
               </div>
 
               {shown.map((s) => {
-                const preview = buildBrowserPreview(s.id);
-                const deep = buildTgDeepLink(BOT, s.id);
+                const preview = buildBrowserPreview(s.id); // e.g. "/respond?sid=..."
+                const deep = buildTgDeepLink(BOT, s.id);   // optional TG button
                 const responders = s.responses_count ?? 0;
 
                 return (
