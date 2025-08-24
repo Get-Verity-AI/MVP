@@ -1,18 +1,54 @@
-import axios from "axios";
+// miniapp/src/lib/api.ts
+import axios, { AxiosError } from "axios";
 
-export const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+/** Resolve backend base URL with sensible default in dev */
+export const API_BASE: string =
+  (import.meta.env.VITE_BACKEND_URL as string) || "http://localhost:8000";
 
-// shared axios instance
+/** Shared axios instance */
 export const api = axios.create({
   baseURL: API_BASE,
-  headers: { "content-type": "application/json" },
+  headers: { "Content-Type": "application/json" },
+  // helps surface "failed to fetch" earlier
+  timeout: 15000,
 });
 
-// ----- Legacy miniapp script endpoints -----
-export type Step =
+/** Interceptors: normalize errors so UI can show helpful messages */
+api.interceptors.response.use(
+  (r) => r,
+  (err: AxiosError<any>) => {
+    // Network / CORS / DNS / server down
+    if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
+      return Promise.reject(new Error("Request timed out. Is the backend running?"));
+    }
+    if (!err.response) {
+      return Promise.reject(
+        new Error(
+          "Network error / CORS: could not reach backend. " +
+            "Check VITE_BACKEND_URL and backend CORS ALLOWED_ORIGINS."
+        )
+      );
+    }
+    // HTTP error with JSON body
+    const data = err.response.data as any;
+    const detail = data?.detail || data?.error || data?.message;
+    return Promise.reject(new Error(detail || `HTTP ${err.response.status}`));
+  }
+);
+
+/** -------- Legacy miniapp script endpoints (kept for compatibility) -------- */
+export type LegacyStep =
   | { id: string; type: "text"; prompt: string; next?: string | null; required?: boolean }
   | { id: string; type: "input_text"; prompt: string; next?: string | null; required?: boolean }
-  | { id: string; type: "input_scale"; prompt: string; min?: number | null; max?: number | null; next?: string | null; required?: boolean }
+  | {
+      id: string;
+      type: "input_scale";
+      prompt: string;
+      min?: number | null;
+      max?: number | null;
+      next?: string | null;
+      required?: boolean;
+    }
   | { id: string; type: "input_email"; prompt: string; next?: string | null; required?: boolean };
 
 export interface Script {
@@ -20,29 +56,46 @@ export interface Script {
   domain: string;
   value_prop: string;
   target_action: string;
-  steps: Step[];
+  steps: LegacyStep[];
 }
 
+/** Old path used by legacy flow */
 export async function fetchScript(sessionId: string): Promise<Script> {
-  const { data } = await axios.get(`${API_BASE}/script`, { params: { session_id: sessionId } });
+  const { data } = await api.get("/script", { params: { session_id: sessionId } });
   return data as Script;
 }
 
-export async function postResponse(payload: {
+/**
+ * Legacy submit helper:
+ * - Your backend exposes `/response` (singular) and `/responses_sb` (Supabase).
+ * - If you were calling `/responses` before, that would 404. Use one of these:
+ */
+export async function postResponseFile(payload: {
   session_id: string;
   respondent_id: string;
   answers: Record<string, unknown>;
   meta?: Record<string, unknown>;
 }): Promise<{ ok: boolean }> {
-  const { data } = await axios.post(`${API_BASE}/responses`, payload, {
-    headers: { "content-type": "application/json" },
-  });
+  const { data } = await api.post("/response", payload); // <- alias to file-mode
   return data;
 }
 
-// ----- New: Founder dashboard -----
+/** New Supabase flow submit */
+export async function postResponsesSB(payload: {
+  session_id: string;
+  tester_email?: string;
+  tester_handle?: string;
+  answers: Record<string, unknown>;
+}): Promise<{ ok: boolean; hashes: { sha256: string; keccak: string } }> {
+  const { data } = await api.post("/responses_sb", payload);
+  return data;
+}
+
+/** ---------------- Founder dashboard & responses ---------------- */
 export async function fetchFounderSessions(founder_email: string) {
-  const { data } = await api.get("/founder_sessions", { params: { founder_email } });
+  const { data } = await api.get("/founder_sessions", {
+    params: { founder_email: (founder_email || "").trim().toLowerCase() },
+  });
   return data as {
     sessions: Array<{
       id: string;
@@ -54,14 +107,14 @@ export async function fetchFounderSessions(founder_email: string) {
   };
 }
 
-//Frontend: responses page (table with columns, click preview to open full)
 export async function fetchSessionResponses(
   session_id: string,
   opts?: { tester?: string; include_answers?: boolean }
 ) {
   const params: Record<string, any> = { session_id };
-  if (opts?.tester) params.tester_email = opts.tester;
+  if (opts?.tester) params.tester_email = (opts.tester || "").trim().toLowerCase();
   if (opts?.include_answers) params.include_answers = true;
+
   const { data } = await api.get("/session_responses", { params });
   return data as {
     session_id: string;
@@ -75,4 +128,21 @@ export async function fetchSessionResponses(
       answers: Record<string, unknown> | null;
     }>;
   };
+}
+
+/** Useful for Respond.tsx */
+export async function fetchSessionQuestions(session_id: string) {
+  const { data } = await api.get("/session_questions", { params: { session_id } });
+  return data as { session_id: string; steps: any[] };
+}
+
+export async function fetchSummarySB(session_id: string) {
+  const { data } = await api.get("/summary_sb", { params: { session_id } });
+  return data as { session_id: string; responses_count: number; first_ts: string | null; last_ts: string | null };
+}
+
+/** Health check helper for debugging “failed to fetch” */
+export async function pingHealth() {
+  const { data } = await api.get("/health");
+  return data as any;
 }
