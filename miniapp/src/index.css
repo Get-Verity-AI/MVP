@@ -160,3 +160,9 @@ input[type="checkbox"]{
 .btn_view:hover {
   background: #2457b5;
 }
+
+.btn_secondary.copied {
+  background-color: #2ecc71; /* green */
+  color: white;
+  border-color: #27ae60;
+}

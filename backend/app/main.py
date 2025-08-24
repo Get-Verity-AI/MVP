@@ -41,17 +41,37 @@ os.makedirs(RESPONSES_DIR, exist_ok=True)
 # Models — Streamlit-parity (Supabase flow)
 # -----------------------------------------------------------------------------
 class FounderInputsStreamlit(BaseModel):
+    class FounderInputsStreamlit(BaseModel):
+    # identity
     email: str
+    founder_display_name: Optional[str] = None
+
+    # core
     problem_domain: Optional[str] = None
-    target_audience: Optional[str] = None
-    problems: List[str] = []                # stored as JSON string in founder_inputs.problems (TEXT column)
+    problems: List[str] = []                # TEXT column in DB (JSON string)
     value_prop: Optional[str] = None
-    target_action: Optional[str] = None
-    follow_up_action: Optional[str] = None
+
+    # pricing
     is_paid_service: bool = False
     pricing_model: Optional[str] = None
-    price_points: List[float] = []          # jsonb
-    pricing_questions: List[str] = []       # jsonb
+    pricing_model_considered: List[str] = []  # jsonb
+    price_points: List[float] = []            # jsonb
+    pricing_questions: List[str] = []         # jsonb (optional keep)
+
+    # segments / audience
+    segment_mode: Optional[str] = None        # 'one' | 'decide'
+    target_segments: List[str] = []           # jsonb
+
+    # actions (willingness)
+    target_actions: List[str] = []            # jsonb
+
+    # legacy fields left for compat (optional)
+    target_audience: Optional[str] = None
+    target_action: Optional[str] = None
+    follow_up_action: Optional[str] = None
+
+    # feedback
+    founder_feedback: Optional[str] = None
 
 class CreateSessionRespV2(BaseModel):
     session_id: str
@@ -89,6 +109,28 @@ def health():
 @app.get("/")
 def root():
     return {"message": "Verity Backend is running. See /docs for API spec."}
+
+# --------------------------------------------------------------------
+# founder register endpoint
+# --------------------------------------------------------------------
+
+class FounderRegister(BaseModel):
+    email: str
+    display_name: Optional[str] = None
+
+@app.post("/founder/register")
+def founder_register(req: FounderRegister):
+    _ensure_sb()
+    sb.table("founders").upsert(
+        {
+            "email": req.email,
+            "display_name": req.display_name or None,
+            "password_hash": "telegram",  # placeholder
+        },
+        on_conflict="email",
+    ).execute()
+    return {"ok": True}
+
 
 # -----------------------------------------------------------------------------
 # File-mode: create session (legacy)
@@ -359,20 +401,35 @@ def _upsert_founder_inputs(fi: FounderInputsStreamlit) -> str:
     _ensure_sb()
     sb.table("founder_inputs").upsert({
         "founder_email": fi.email,
+        "founder_display_name": fi.founder_display_name,
         "problem_domain": fi.problem_domain,
-        "target_audience": fi.target_audience, 
-        "problems": json.dumps(fi.problems),  # TEXT column (JSON string)
+        "target_audience": fi.target_audience,  # keep for compat
+        "problems": json.dumps(fi.problems),    # TEXT column (JSON string)
         "value_prop": fi.value_prop,
-        "target_action": fi.target_action,
-        "follow_up_action": fi.follow_up_action,
+
+        # pricing
         "is_paid_service": fi.is_paid_service,
         "pricing_model": fi.pricing_model,
-        "price_points": fi.price_points,            # jsonb
-        "pricing_questions": fi.pricing_questions,  # jsonb
+        "pricing_model_considered": fi.pricing_model_considered,
+        "price_points": fi.price_points,
+        "pricing_questions": fi.pricing_questions,
+
+        # segments
+        "segment_mode": fi.segment_mode,
+        "target_segments": fi.target_segments,
+
+        # actions
+        "target_action": fi.target_action,
+        "follow_up_action": fi.follow_up_action,
+        "target_actions": fi.target_actions,
+
+        # feedback
+        "founder_feedback": fi.founder_feedback,
     }, on_conflict="founder_email").execute()
 
     row = sb.table("founder_inputs").select("id").eq("founder_email", fi.email).single().execute()
     return row.data["id"]
+
 
 def _deterministic_steps(fi_row: dict) -> List[dict]:
     problems = []

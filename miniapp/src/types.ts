@@ -1,16 +1,29 @@
 export type FounderInputsStreamlit = {
     email: string;
-    problem_domain?: string;
-    target_audience?: string;   
+    founder_display_name?: string | null;
+  
+    problem_domain?: string | null;
     problems: string[];
-    value_prop?: string;
-    target_action?: string;
-    follow_up_action?: string;
-    is_paid_service: boolean;
-    pricing_model?: string;
-    price_points: number[];
-    pricing_questions: string[];
+    value_prop?: string | null;
+  
+    is_paid_service?: boolean;
+    pricing_model?: string | null;
+    pricing_model_considered?: string[];  // jsonb
+    price_points?: number[];              // jsonb
+    pricing_questions?: string[];         // keep for compat
+  
+    segment_mode?: "one" | "decide";
+    target_segments?: string[];           // jsonb
+  
+    target_actions?: string[];            // jsonb
+  
+    target_audience?: string | null;      // legacy compat
+    target_action?: string | null;        // legacy compat
+    follow_up_action?: string | null;     // legacy compat
+  
+    founder_feedback?: string | null;
   };
+  
   
   export type Step =
     | { type: "text"; key: string; label: string }
