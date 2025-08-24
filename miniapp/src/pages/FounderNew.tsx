@@ -3,19 +3,41 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import type { FounderInputsStreamlit } from "../types";
 
 const API = import.meta.env.VITE_BACKEND_URL;
-const PRICING_MODELS = ["Subscription","One-time","Freemium","Usage-based","Other"];
-const ACTION_OPTIONS = [
-  { key:"join_waitlist", label:"Join the product waitlist" },
-  { key:"download_app",  label:"Download the app now" },
-  { key:"share_email",   label:"Share email for updates" },
-  { key:"follow_x",      label:"Follow on X for updates" },
+
+const PRICING_MODELS = [
+  "Free - no charge",   // NEW first option
+  "Subscription",
+  "One-time",
+  "Freemium",
+  "Usage-based",
+  "Other",
 ];
+
+const ACTION_OPTIONS = [
+  { key: "join_waitlist", label: "Join the product waitlist" },
+  { key: "download_app",  label: "Download the app now" },
+  { key: "share_email",   label: "Share email for updates" },
+  { key: "follow_x",      label: "Follow on X for updates" },
+];
+
+type StepDef = {
+  key: string;
+  title: string;
+  render: () => JSX.Element;
+  valid: () => boolean;
+  final?: boolean;
+};
+
+const numberize = (s: string) => {
+  const n = Number((s || "").replace(/,/g, "").trim());
+  return Number.isFinite(n) ? n : null;
+};
 
 export default function FounderNew() {
   const [sp] = useSearchParams();
   const nav = useNavigate();
-  const founder_email = useMemo(()=> sp.get("email") || "", [sp]);
-  const founder_name  = useMemo(()=> sp.get("name")  || "", [sp]);
+  const founder_email = useMemo(() => sp.get("email") || "", [sp]);
+  const founder_name  = useMemo(() => sp.get("name")  || "", [sp]);
 
   // identity
   const [displayName, setDisplayName] = useState<string>(founder_name || "");
@@ -36,12 +58,14 @@ export default function FounderNew() {
 
   // pricing
   const [isPaid, setIsPaid] = useState<"yes"|"no">("yes");
-  const [pricingModel, setPricingModel] = useState<string>("Subscription");
+  const [pricingModel, setPricingModel] = useState<string>(PRICING_MODELS[0]); // default to Free
   const [pricingModelConsidered, setPricingModelConsidered] = useState<string[]>([]);
   const toggleConsidered = (m:string)=> setPricingModelConsidered(a=> a.includes(m)? a.filter(x=>x!==m) : [...a,m]);
 
   const [price1, setPrice1] = useState(""); const [price2, setPrice2] = useState(""); const [price3, setPrice3] = useState("");
-  const numberize = (s:string)=> { const n = Number((s||"").replace(/,/g,"").trim()); return Number.isFinite(n) ? n : null; };
+
+  // treat explicit “Not paid” or “Free - no charge” as free
+  const isFreeChoice = pricingModel === "Free - no charge" || isPaid === "no";
 
   // actions
   const [selectedActions, setSelectedActions] = useState<string[]>([]);
@@ -54,13 +78,15 @@ export default function FounderNew() {
   // stepper
   const [step, setStep] = useState(0);
 
-  const steps = [
+  const steps: StepDef[] = [
     {
       key: "identity",
       title: "Founder Inputs",
       render: () => (
         <>
-          <p className="form-hint">Please set aside 15 minutes. The clearer your inputs, the better the insight Verity can gather for you.</p>
+          <p className="form-hint">
+            Please set aside 15 minutes. The clearer your inputs, the better the insight Verity can gather for you.
+          </p>
           <div className="form-section">
             <label>What name will most of your respondents know you by?</label>
             <input className="w-full px-3 py-2 rounded-xl border" value={displayName} onChange={e=>setDisplayName(e.target.value)} />
@@ -119,9 +145,12 @@ export default function FounderNew() {
       key: "pitch",
       title: "What’s your pitch?",
       render: () => (
-        <input className="w-full px-3 py-2 rounded-xl border"
-               placeholder="“We do [this] so users can unlock [value]”"
-               value={pitch} onChange={e=>setPitch(e.target.value)} />
+        <input
+          className="w-full px-3 py-2 rounded-xl border"
+          placeholder="“We do [this] so users can unlock [value]”"
+          value={pitch}
+          onChange={e=>setPitch(e.target.value)}
+        />
       ),
       valid: () => true
     },
@@ -178,13 +207,42 @@ export default function FounderNew() {
       key: "prices",
       title: "Price Points to Test (up to 3)",
       render: () => (
-        <div className="stack">
-          <div className="price-input"><input className="px-3 py-2 rounded-xl border w-full" placeholder="Price Point 1" value={price1} onChange={e=>setPrice1(e.target.value)} /></div>
-          <div className="price-input"><input className="px-3 py-2 rounded-xl border w-full" placeholder="Price Point 2 (optional)" value={price2} onChange={e=>setPrice2(e.target.value)} /></div>
-          <div className="price-input"><input className="px-3 py-2 rounded-xl border w-full" placeholder="Price Point 3 (optional)" value={price3} onChange={e=>setPrice3(e.target.value)} /></div>
-        </div>
+        <>
+          {isFreeChoice && (
+            <p className="form-hint">
+              Price points are disabled because you selected a free / no-charge model.
+            </p>
+          )}
+          <div className="stack">
+            <div className="price-input">
+              <input className="px-3 py-2 rounded-xl border w-full"
+                     placeholder="Price Point 1"
+                     value={price1}
+                     onChange={e=>setPrice1(e.target.value)}
+                     disabled={isFreeChoice} />
+            </div>
+            <div className="price-input">
+              <input className="px-3 py-2 rounded-xl border w-full"
+                     placeholder="Price Point 2 (optional)"
+                     value={price2}
+                     onChange={e=>setPrice2(e.target.value)}
+                     disabled={isFreeChoice} />
+            </div>
+            <div className="price-input">
+              <input className="px-3 py-2 rounded-xl border w-full"
+                     placeholder="Price Point 3 (optional)"
+                     value={price3}
+                     onChange={e=>setPrice3(e.target.value)}
+                     disabled={isFreeChoice} />
+            </div>
+          </div>
+        </>
       ),
-      valid: () => numberize(price1)!==null || numberize(price2)!==null || numberize(price3)!==null
+      valid: () =>
+        isFreeChoice ||
+        numberize(price1) !== null ||
+        numberize(price2) !== null ||
+        numberize(price3) !== null
     },
     {
       key: "actions",
@@ -227,7 +285,10 @@ export default function FounderNew() {
   const isLast = !!cur.final;
 
   const next = () => {
-    if (!cur.valid()) return alert("Please complete this step.");
+    if (!cur.valid()) {
+      alert("Please complete this step.");
+      return;
+    }
     setStep(s => Math.min(s+1, steps.length-1));
   };
 
@@ -235,26 +296,34 @@ export default function FounderNew() {
 
   const createSession = async () => {
     const problems = [p1,p2,p3].map(s=>s.trim()).filter(Boolean);
-    const price_points = [price1,price2,price3].map(numberize).filter((n): n is number => n!==null);
+    const price_points_raw = [price1,price2,price3].map(numberize).filter((n): n is number => n!==null);
     const target_segments = segments.map(s=> s.trim()).filter(Boolean);
+
+    const actuallyPaid = !isFreeChoice;
 
     const payload: FounderInputsStreamlit = {
       email: founder_email,
       founder_display_name: displayName || null,
+
       problem_domain: industry || null,
       problems,
       value_prop: pitch || null,
-      is_paid_service: isPaid === "yes",
+
+      is_paid_service: actuallyPaid,
       pricing_model: pricingModel,
       pricing_model_considered: pricingModelConsidered,
-      price_points,
+
+      price_points: actuallyPaid ? price_points_raw : [],
       pricing_questions: [],
+
       segment_mode: segmentMode,
       target_segments,
+
       target_actions: [
         ...selectedActions,
         ...(actionOther.trim() ? [`other:${actionOther.trim()}`] : [])
       ],
+
       founder_feedback: founderFeedback || null,
     };
 
@@ -289,7 +358,12 @@ export default function FounderNew() {
         ) : (
           <button className="btn_success" onClick={createSession}>Create Interview Session</button>
         )}
-        <a className="btn_secondary" href={`/founder/dashboard?email=${encodeURIComponent(founder_email)}`} target="_blank" rel="noreferrer">
+        <a
+          className="btn_secondary"
+          href={`/founder/dashboard?email=${encodeURIComponent(founder_email)}`}
+          target="_blank"
+          rel="noreferrer"
+        >
           Open Dashboard
         </a>
       </div>
