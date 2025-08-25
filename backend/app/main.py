@@ -387,9 +387,10 @@ def _deterministic_steps(fi_row: dict) -> List[dict]:
         primary_action_label = "take the next step"
 
     steps: List[dict] = [
-        {"type": "input_wallet", "key": "wallet", "label": "Account set up — Web3 auth (connect your wallet)"},
-        {"type": "text", "key": "intro_a",
-         "label": f"Hi! Thank you for taking the time to help {founder}."},
+        {"type": "input_wallet", "key": "wallet", "label": "Connect your wallet to get reward for your impact"},
+        {"type": "account_setup", "key": "intro_a",
+         "title": f"Hi! Thank you for taking the time to help {founder}.",
+         "copy": "Sign in and connect your wallet for rewards (optional). Skip if you want to stay anonymous."},
         {"type": "text", "key": "intro_b",
          "label": ("This conversation is just between us — I’ll analyse your insights alongside other "
                    f"responses before I share anonymous headlines with {founder}.")},
@@ -540,7 +541,8 @@ def submit_responses_sb(req: SubmitAnswersReq):
 
     sb.table("responses").insert({
         "session_id": req.session_id,
-        "tester_id": tester_id,
+        "tester_id": tester_id,         # when available
+        "tester_email": req.tester_email,   # optional fallback
         "founder_email": sess["founder_email"],
         "answers": req.answers,
         "answer_hash": keccak_hex,
@@ -631,3 +633,20 @@ def session_responses(session_id: str, include_answers: bool = False, tester_ema
             "answers": (ans if include_answers else None),
         })
     return {"session_id": session_id, "responses": out}
+
+@app.get("/tester_responses")
+def tester_responses(uid: str | None = None, tester_email: str | None = None):
+    _ensure_sb()
+    
+    # Server-side fallback query (if tester_id is missing, filter by tester_email)
+    if uid:  # supabase auth uid
+        rows = sb.table("responses").select("*").eq("tester_id", uid).execute().data
+        if rows:
+            return {"responses": rows}
+
+    # fallback
+    if tester_email:
+        rows = sb.table("responses").select("*").eq("tester_email", tester_email.lower()).execute().data
+        return {"responses": rows}
+    
+    return {"responses": []}

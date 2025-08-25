@@ -37,64 +37,45 @@ export default function Respond() {
   const back = () => { setErr(null); setI((x) => Math.max(0, x - 1)); };
   function requiredForStep(): string | null {
     if (!step) return null;
-  
+
     // steps that never require input
-    const optional = new Set(["text", "input_wallet"]);
+    const optional = new Set(["text", "input_wallet", "account_setup"]);
     if (optional.has(step.type)) return null;
-  
-    // --- problem block: require the score only ---
+
     if (step.type === "problem_block") {
       const scoreKey = `${step.key}_score`;
       const v = answers[scoreKey];
       if (v === undefined || v === "") return "Please provide a 1–5 score.";
       return null;
     }
-  
-    // --- unified question+answer ---
+
     if (step.type === "question_text") {
       const k = step.key;
       const v = k ? answers[k] : "";
       if (!v || String(v).trim() === "") return "Please answer to continue";
       return null;
     }
-  
-    // --- three problems on one page (at least one filled) ---
-    {step.type === "three_problems" && (() => {
-        const s = step as any; // <- cast here too
-        const keys: string[] =
-          Array.isArray(s.binds) && s.binds.length
-            ? (s.binds as string[])
-            : ["problem_1", "problem_2", "problem_3"];
-      
-        const titles: string[] = s.titles || [];
-        const placeholders: string[] = s.placeholders || [];
-      
-        return (
-          <div className="mt12" style={{ display: "grid", gap: 12 }}>
-            <h2 className="step-title" style={{ marginTop: 0 }}>
-              {s.title || s.label || "What are the top 3 problems?"}
-            </h2>
-            {s.hint && <div className="help" style={{ whiteSpace: "pre-wrap" }}>{s.hint}</div>}
-      
-            <div className="stack">
-              {keys.map((k, idx) => (
-                <div className="input-row" key={k}>
-                  <label className="form-title">{titles[idx] || `Problem ${idx + 1}`}</label>
-                  <input
-                    type="text"
-                    placeholder={placeholders[idx] || `Problem ${idx + 1}`}
-                    value={answers[k] || ""}
-                    onChange={(e) => setAnswer(k, e.target.value)}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-      
-  
-    // --- numeric scale with preamble: enforce range if provided ---
+
+    // NEW: pricing models — require a number for each model, within range
+    if (step.type === "pricing_models_block") {
+      const models = Array.isArray((step as any).models) ? (step as any).models : [];
+      const min = (step as any).min ?? 1;
+      const max = (step as any).max ?? 5;
+
+      for (let idx = 0; idx < models.length; idx++) {
+        const m = models[idx] || {};
+        const key = m.key || `pricing_${idx + 1}`;
+        const label = m.label || `Pricing ${idx + 1}`;
+        const v = answers[key];
+        if (v === undefined || v === "") return `Please rate "${label}" (${min}–${max}).`;
+        const n = Number(v);
+        if (Number.isNaN(n) || n < min || n > max) {
+          return `Please rate "${label}" between ${min} and ${max}.`;
+        }
+      }
+      return null;
+    }
+
     if (step.type === "scale_with_preamble") {
       const v = answers[step.key];
       if (v === undefined || v === "") return "Please provide a 1–5 score.";
@@ -104,8 +85,8 @@ export default function Respond() {
       if (typeof step.max === "number" && n > step.max) return `Maximum is ${step.max}.`;
       return null;
     }
-  
-    // --- generic fallback (text, email, choice, scale, etc.) ---
+
+    // generic fallback
     const v = answers[step.key];
     if (v === undefined || v === "" || (typeof v === "string" && v.trim() === "")) {
       return "Please answer to continue";
@@ -258,6 +239,86 @@ export default function Respond() {
             />
           </div>
         )}
+
+        {step.type === "account_setup" && (() => {
+          const fieldKey = step.key || "wallet";
+          return (
+            <div className="mt12" style={{ display: "grid", gap: 12 }}>
+              <h2 className="step-title" style={{ marginTop: 0 }}>
+                {step.title || step.label || "Account setup"}
+              </h2>
+
+              <div className="help" style={{ whiteSpace: "pre-wrap" }}>
+                {step.copy || "Thanks for taking the time to help this company!"}
+              </div>
+
+              {answers[fieldKey] ? (
+                <div className="row" style={{ alignItems: "center", gap: 8 }}>
+                  <span className="pill">Connected: {String(answers[fieldKey])}</span>
+                  <button className="btn_secondary" onClick={() => onDisconnectWallet(fieldKey)}>Disconnect</button>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button className="btn_primary" onClick={() => onConnectWallet(fieldKey)}>
+                      Connect wallet
+                    </button>
+                    <button className="btn_secondary" onClick={() => window.open('/founder/signin', '_blank')}>
+                      Sign in
+                    </button>
+                    <button className="btn_secondary" onClick={() => window.open('/founder/signup', '_blank')}>
+                      Sign up
+                    </button>
+                  </div>
+                  <button className="btn_secondary" onClick={() => setI((x) => x + 1)} title="You can connect later">
+                    Skip for now
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {step.type === "pricing_models_block" && (() => {
+          const s = step as any;
+          const models: Array<{ key?: string; label?: string }> = Array.isArray(s.models) ? s.models : [];
+          const min = s.min ?? 1, max = s.max ?? 5;
+
+          return (
+            <div className="mt12" style={{ display: "grid", gap: 12 }}>
+              <h2 className="step-title" style={{ marginTop: 0 }}>
+                {s.title || s.label || "Pricing feedback"}
+              </h2>
+              {s.preamble && (
+                <div className="help" style={{ whiteSpace: "pre-wrap" }}>{s.preamble}</div>
+              )}
+
+              <div className="stack">
+                {models.map((m, idx) => {
+                  const key = m.key || `pricing_${idx + 1}`;
+                  const label = m.label || `Pricing ${idx + 1}`;
+                  return (
+                    <div className="input-row" key={key}>
+                      <label className="form-title">{label}</label>
+                      <input
+                        type="number"
+                        min={min}
+                        max={max}
+                        value={answers[key] ?? ""}
+                        onChange={(e) => {
+                          const n = Number(e.target.value);
+                          if (!Number.isNaN(n)) setAnswer(key, n);
+                          else setAnswer(key, e.target.value);
+                        }}
+                      />
+                      <div className="sub">Rate {min}–{max}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="actions mt16" style={{ display: "flex", gap: 8 }}>
           <button className="btn" onClick={back} disabled={i === 0}>Back</button>
