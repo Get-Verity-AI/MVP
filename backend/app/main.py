@@ -682,17 +682,27 @@ def tester_questionnaires(uid: str | None = None, tester_email: str | None = Non
                     # Calculate completion percentage based on answered questions
                     if resp.get("answers") and total_questions > 0:
                         answered_questions = 0
+                        answerable_questions = 0
                         answers = resp.get("answers", {})
                         
                         for question in questions:
+                            question_type = question.get("type", "")
                             question_key = question.get("key")
-                            if question_key and answers.get(question_key):
-                                # Check if the answer is not empty
-                                answer_value = answers[question_key]
-                                if answer_value and str(answer_value).strip():
-                                    answered_questions += 1
+                            
+                            # Only count questions that require answers (exclude text, account_setup, etc.)
+                            if question_type not in ["text", "account_setup"]:
+                                answerable_questions += 1
+                                
+                                if question_key and question_key in answers:
+                                    # Consider any non-None answer as answered
+                                    answer_value = answers[question_key]
+                                    if answer_value is not None:
+                                        answered_questions += 1
                         
-                        completion_percentage = min(100, int((answered_questions / total_questions) * 100))
+                        if answerable_questions > 0:
+                            completion_percentage = min(100, int((answered_questions / answerable_questions) * 100))
+                        else:
+                            completion_percentage = 0
                     
                     # Get payment information
                     payment_amount = resp.get("payment_amount", 0)
