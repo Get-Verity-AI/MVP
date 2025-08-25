@@ -1,6 +1,8 @@
 // miniapp/src/pages/FounderDashboard.tsx
 import { useEffect, useMemo, useState } from "react";
 import { buildBrowserPreview } from "../lib/tg";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabase";
 
 const API = import.meta.env.VITE_BACKEND_URL as string;
 const BOT = (import.meta.env as any).VITE_BOT_USERNAME as string | undefined;
@@ -16,6 +18,8 @@ type SessionRow = {
 const normEmail = (s: string) => (s || "").trim().toLowerCase();
 
 export default function FounderDashboard() {
+  const nav = useNavigate();
+  
   useEffect(() => {
     document.body.style.background = "#ffffff";
     document.body.style.color = "#0f1115";
@@ -33,10 +37,53 @@ export default function FounderDashboard() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    const fromStorage = normEmail(localStorage.getItem("verityFounderEmail") || "");
-    const fromQuery = normEmail(new URLSearchParams(location.search).get("email") || "");
-    const e = fromQuery || fromStorage;
-    if (e) { setEmail(e); setSignedIn(true); }
+    (async () => {
+      // Check if Supabase is properly configured
+      if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+        // Fall back to existing localStorage method if Supabase not configured
+        const fromStorage = normEmail(localStorage.getItem("verityFounderEmail") || "");
+        const fromQuery = normEmail(new URLSearchParams(location.search).get("email") || "");
+        const e = fromQuery || fromStorage;
+        if (e) { 
+          setEmail(e); 
+          setSignedIn(true); 
+        }
+        return;
+      }
+
+      // Check if supabase client is available
+      if (!supabase) {
+        // Fall back to existing localStorage method if Supabase not available
+        const fromStorage = normEmail(localStorage.getItem("verityFounderEmail") || "");
+        const fromQuery = normEmail(new URLSearchParams(location.search).get("email") || "");
+        const e = fromQuery || fromStorage;
+        if (e) { 
+          setEmail(e); 
+          setSignedIn(true); 
+        }
+        return;
+      }
+
+      // Check if user is authenticated with Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        // User is authenticated, use their email
+        const authEmail = session.user.email;
+        setEmail(authEmail || "");
+        setSignedIn(true);
+        localStorage.setItem("verityFounderEmail", authEmail || "");
+      } else {
+        // Fall back to existing localStorage method for backward compatibility
+        const fromStorage = normEmail(localStorage.getItem("verityFounderEmail") || "");
+        const fromQuery = normEmail(new URLSearchParams(location.search).get("email") || "");
+        const e = fromQuery || fromStorage;
+        if (e) { 
+          setEmail(e); 
+          setSignedIn(true); 
+        }
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -152,11 +199,12 @@ export default function FounderDashboard() {
             )}
             <button
               className="btn_secondary"
-              onClick={() => {
+              onClick={async () => {
+                if (supabase) {
+                  await supabase.auth.signOut();
+                }
                 localStorage.removeItem("verityFounderEmail");
-                setSignedIn(false);
-                setSessions([]);
-                setErr(null);
+                nav("/founder/signin");
               }}
             >
               Sign out

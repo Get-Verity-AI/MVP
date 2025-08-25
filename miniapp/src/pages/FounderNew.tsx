@@ -1,7 +1,8 @@
 // miniapp/src/pages/FounderNew.tsx
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import type { FounderInputsStreamlit } from "../types";
+import { supabase } from "../lib/supabase";
 
 const API = import.meta.env.VITE_BACKEND_URL;
 
@@ -20,6 +21,39 @@ const normEmail = (s: string) => (s || "").trim().toLowerCase();
 export default function FounderNew() {
   const [sp] = useSearchParams();
   const nav = useNavigate();
+  const [authChecking, setAuthChecking] = useState(true);
+
+  // Check authentication on mount
+  useEffect(() => {
+    (async () => {
+      console.log("🔐 Checking authentication...");
+      
+      // Check if Supabase is properly configured
+      if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+        console.log("⚠️ No Supabase config found, allowing access");
+        setAuthChecking(false);
+        return;
+      }
+
+      // Check if supabase client is available
+      if (!supabase) {
+        console.log("⚠️ Supabase client not available, allowing access");
+        setAuthChecking(false);
+        return;
+      }
+
+      console.log("🔍 Checking Supabase session...");
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.log("❌ No session found, redirecting to signin");
+        nav("/founder/signin");
+      } else {
+        console.log("✅ Session found, user authenticated:", session.user.email);
+        setAuthChecking(false);
+      }
+    })();
+  }, [nav]);
 
   const emailFromUrl = useMemo(() => sp.get("email") || "", [sp]);
   const [founderEmail, setFounderEmail] = useState<string>(
@@ -54,7 +88,7 @@ export default function FounderNew() {
   const steps: StepDef[] = [
     {
       key: "identity",
-      title: "Founder Inputs",
+      title: "Founder Questionnaire",
       render: () => (
         <>
           <p className="form-hint">Please set aside 15 minutes. The clearer your inputs, the better the insight Verity can gather for you.</p>
@@ -253,6 +287,11 @@ export default function FounderNew() {
     }
   }
 
+  // Show loading while checking auth
+  if (authChecking) {
+    return <div className="container p-6">Checking authentication...</div>;
+  }
+
   return (
     <div className="container">
       {/* email strip */}
@@ -273,12 +312,33 @@ export default function FounderNew() {
       </div>
 
       <div className="stepper-head">
-        <h1>Founder Inputs</h1>
+     
         <div className="stepper-count">Step {step+1} of {steps.length}</div>
       </div>
 
       <div className="card">
         <h2 style={{marginBottom:12}}>{cur.title}</h2>
+        
+        {/* Intro block – show only on first step */}
+        {step === 0 && (
+          <>
+            <p className="opacity-80 mb-4" style={{ whiteSpace: "pre-wrap" }}>
+              You'll answer a short founder questionnaire. Verity will generate a shareable
+              interview link for your prospects/users. All responses will land in your Founder Dashboard.
+              {"\n"}Please set aside 15 minutes. The clearer your inputs, the better the insight Verity can gather for you.
+            </p>
+
+            <div className="rounded-2xl border p-4 mb-6">
+              <strong>How it works</strong>
+              <ol className="list-decimal ml-6 mt-2 space-y-1">
+                <li>Answer ~10–12 questions about your product and audience.</li>
+                <li>We create a respondent questionnaire + a share link (and a Telegram deep link).</li>
+                <li>You share the link; responses appear in your dashboard.</li>
+              </ol>
+            </div>
+          </>
+        )}
+        
         <div className="form-section">{cur.render()}</div>
         {err && <div style={{ color:"#b42318", marginTop:10 }}>{err}</div>}
         <div className="stepper-btns">
