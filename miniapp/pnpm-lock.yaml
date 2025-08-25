@@ -26,6 +26,9 @@ importers:
       '@near-wallet-selector/react-hook':
         specifier: ^9.3.0
         version: 9.3.0(@near-js/crypto@1.4.2)(@near-js/keystores@0.2.2)(@near-js/transactions@1.3.3)
+      '@supabase/supabase-js':
+        specifier: ^2.56.0
+        version: 2.56.0
       axios:
         specifier: ^1.11.0
         version: 1.11.0
@@ -53,7 +56,7 @@ importers:
         version: 19.1.7(@types/react@19.1.10)
       '@vitejs/plugin-react':
         specifier: ^5.0.0
-        version: 5.0.1(vite@7.1.3)
+        version: 5.0.1(vite@7.1.3(@types/node@24.3.0))
       eslint:
         specifier: ^9.33.0
         version: 9.33.0
@@ -74,7 +77,7 @@ importers:
         version: 8.40.0(eslint@9.33.0)(typescript@5.8.3)
       vite:
         specifier: ^7.1.2
-        version: 7.1.3
+        version: 7.1.3(@types/node@24.3.0)
 
 packages:
 
@@ -659,6 +662,28 @@ packages:
   '@scure/bip39@1.6.0':
     resolution: {integrity: sha512-+lF0BbLiJNwVlev4eKelw1WWLaiKXw7sSl8T6FvBlWkdX+94aGJ4o8XjUdlyhTCjd8c+B3KT3JfS8P0bLRNU6A==}
 
+  '@supabase/auth-js@2.71.1':
+    resolution: {integrity: sha512-mMIQHBRc+SKpZFRB2qtupuzulaUhFYupNyxqDj5Jp/LyPvcWvjaJzZzObv6URtL/O6lPxkanASnotGtNpS3H2Q==}
+
+  '@supabase/functions-js@2.4.5':
+    resolution: {integrity: sha512-v5GSqb9zbosquTo6gBwIiq7W9eQ7rE5QazsK/ezNiQXdCbY+bH8D9qEaBIkhVvX4ZRW5rP03gEfw5yw9tiq4EQ==}
+
+  '@supabase/node-fetch@2.6.15':
+    resolution: {integrity: sha512-1ibVeYUacxWYi9i0cf5efil6adJ9WRyZBLivgjs+AUpewx1F3xPi7gLgaASI2SmIQxPoCEjAsLAzKPgMJVgOUQ==}
+    engines: {node: 4.x || >=6.0.0}
+
+  '@supabase/postgrest-js@1.21.3':
+    resolution: {integrity: sha512-rg3DmmZQKEVCreXq6Am29hMVe1CzemXyIWVYyyua69y6XubfP+DzGfLxME/1uvdgwqdoaPbtjBDpEBhqxq1ZwA==}
+
+  '@supabase/realtime-js@2.15.1':
+    resolution: {integrity: sha512-edRFa2IrQw50kNntvUyS38hsL7t2d/psah6om6aNTLLcWem0R6bOUq7sk7DsGeSlNfuwEwWn57FdYSva6VddYw==}
+
+  '@supabase/storage-js@2.11.0':
+    resolution: {integrity: sha512-Y+kx/wDgd4oasAgoAq0bsbQojwQ+ejIif8uczZ9qufRHWFLMU5cODT+ApHsSrDufqUcVKt+eyxtOXSkeh2v9ww==}
+
+  '@supabase/supabase-js@2.56.0':
+    resolution: {integrity: sha512-XqwhHSyVnkjdliPN61CmXsmFGnFHTX2WDdwjG3Ukvdzuu3Trix+dXupYOQ3BueIyYp7B6t0yYpdQtJP2hIInyg==}
+
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
 
@@ -677,6 +702,12 @@ packages:
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
 
+  '@types/node@24.3.0':
+    resolution: {integrity: sha512-aPTXCrfwnDLj4VvXrm+UUCQjNEvJgNA8s5F1cvwQU+3KNltTOkBm1j30uNLyqqPNe7gE3KFzImYoZEfLhp4Yow==}
+
+  '@types/phoenix@1.6.6':
+    resolution: {integrity: sha512-PIzZZlEppgrpoT2QgbnDU+MMzuR6BbCjllj0bM70lWoejMeNJAxCchxnv7J3XFkI8MpygtRpzXrIlmWUBclP5A==}
+
   '@types/react-dom@19.1.7':
     resolution: {integrity: sha512-i5ZzwYpqjmrKenzkoLM2Ibzt6mAsM7pxB6BCIouEVVmgiqaMj1TjaK7hnA36hbW5aZv20kx7Lw6hWzPWg0Rurw==}
     peerDependencies:
@@ -684,6 +715,9 @@ packages:
 
   '@types/react@19.1.10':
     resolution: {integrity: sha512-EhBeSYX0Y6ye8pNebpKrwFJq7BoQ8J5SO6NlvNwwHjSj6adXJViPQrKlsyPw7hLBLvckEMO1yxeGdR82YBBlDg==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@typescript-eslint/eslint-plugin@8.40.0':
     resolution: {integrity: sha512-w/EboPlBwnmOBtRbiOvzjD+wdiZdgFeo17lkltrtn7X37vagKKWJABvyfsJXTlHe6XBzugmYgd4A4nW+k8Mixw==}
@@ -1706,6 +1740,9 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
+  undici-types@7.10.0:
+    resolution: {integrity: sha512-t5Fy/nfn+14LuOc2KNYg75vZqClpAiqscVvMygNnlsHBFpSXdJaYtXMcdNLpl/Qvc3P2cB3s6lOV51nqsFq4ag==}
+
   unfetch@4.2.0:
     resolution: {integrity: sha512-F9p7yYCn6cIW9El1zi0HI6vqpeIvBsr3dSuRO6Xuppb1u5rXpCPmMvLSyECLhybr9isec8Ohl0hPekMVrEinDA==}
 
@@ -2543,6 +2580,48 @@ snapshots:
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
 
+  '@supabase/auth-js@2.71.1':
+    dependencies:
+      '@supabase/node-fetch': 2.6.15
+
+  '@supabase/functions-js@2.4.5':
+    dependencies:
+      '@supabase/node-fetch': 2.6.15
+
+  '@supabase/node-fetch@2.6.15':
+    dependencies:
+      whatwg-url: 5.0.0
+
+  '@supabase/postgrest-js@1.21.3':
+    dependencies:
+      '@supabase/node-fetch': 2.6.15
+
+  '@supabase/realtime-js@2.15.1':
+    dependencies:
+      '@supabase/node-fetch': 2.6.15
+      '@types/phoenix': 1.6.6
+      '@types/ws': 8.18.1
+      ws: 8.18.2
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  '@supabase/storage-js@2.11.0':
+    dependencies:
+      '@supabase/node-fetch': 2.6.15
+
+  '@supabase/supabase-js@2.56.0':
+    dependencies:
+      '@supabase/auth-js': 2.71.1
+      '@supabase/functions-js': 2.4.5
+      '@supabase/node-fetch': 2.6.15
+      '@supabase/postgrest-js': 1.21.3
+      '@supabase/realtime-js': 2.15.1
+      '@supabase/storage-js': 2.11.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   '@types/babel__core@7.20.5':
     dependencies:
       '@babel/parser': 7.28.3
@@ -2568,6 +2647,12 @@ snapshots:
 
   '@types/json-schema@7.0.15': {}
 
+  '@types/node@24.3.0':
+    dependencies:
+      undici-types: 7.10.0
+
+  '@types/phoenix@1.6.6': {}
+
   '@types/react-dom@19.1.7(@types/react@19.1.10)':
     dependencies:
       '@types/react': 19.1.10
@@ -2575,6 +2660,10 @@ snapshots:
   '@types/react@19.1.10':
     dependencies:
       csstype: 3.1.3
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 24.3.0
 
   '@typescript-eslint/eslint-plugin@8.40.0(@typescript-eslint/parser@8.40.0(eslint@9.33.0)(typescript@5.8.3))(eslint@9.33.0)(typescript@5.8.3)':
     dependencies:
@@ -2669,7 +2758,7 @@ snapshots:
       '@typescript-eslint/types': 8.40.0
       eslint-visitor-keys: 4.2.1
 
-  '@vitejs/plugin-react@5.0.1(vite@7.1.3)':
+  '@vitejs/plugin-react@5.0.1(vite@7.1.3(@types/node@24.3.0))':
     dependencies:
       '@babel/core': 7.28.3
       '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.28.3)
@@ -2677,7 +2766,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-beta.32
       '@types/babel__core': 7.20.5
       react-refresh: 0.17.0
-      vite: 7.1.3
+      vite: 7.1.3(@types/node@24.3.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -3624,6 +3713,8 @@ snapshots:
 
   typescript@5.8.3: {}
 
+  undici-types@7.10.0: {}
+
   unfetch@4.2.0: {}
 
   update-browserslist-db@1.1.3(browserslist@4.25.3):
@@ -3655,7 +3746,7 @@ snapshots:
       - utf-8-validate
       - zod
 
-  vite@7.1.3:
+  vite@7.1.3(@types/node@24.3.0):
     dependencies:
       esbuild: 0.25.9
       fdir: 6.5.0(picomatch@4.0.3)
@@ -3664,6 +3755,7 @@ snapshots:
       rollup: 4.47.0
       tinyglobby: 0.2.14
     optionalDependencies:
+      '@types/node': 24.3.0
       fsevents: 2.3.3
 
   webidl-conversions@3.0.1: {}
