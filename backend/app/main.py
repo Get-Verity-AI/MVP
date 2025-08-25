@@ -502,6 +502,38 @@ def session_questions(session_id: str):
     if not row: raise HTTPException(404, "session not found")
     return {"session_id": session_id, "steps": row["questions"]}
 
+@app.get("/session_questions_with_answers")
+def session_questions_with_answers(session_id: str, tester_email: str | None = None):
+    _ensure_sb()
+    if not session_id: raise HTTPException(400, "session_id is required")
+    
+    # Get session questions
+    row = sb.table("sessions").select("questions").eq("id", session_id).single().execute().data
+    if not row: raise HTTPException(404, "session not found")
+    
+    # Get user's previous answers if email provided
+    previous_answers = {}
+    if tester_email:
+        email = _canon_email(tester_email)
+        # Find the tester's response for this session
+        response_row = (
+            sb.table("responses")
+            .select("answers")
+            .eq("session_id", session_id)
+            .eq("tester_email", email)
+            .single()
+            .execute()
+            .data
+        )
+        if response_row:
+            previous_answers = response_row.get("answers", {})
+    
+    return {
+        "session_id": session_id, 
+        "steps": row["questions"],
+        "previous_answers": previous_answers
+    }
+
 # -----------------------------------------------------------------------------
 # Supabase: store responses with hashes
 # -----------------------------------------------------------------------------
