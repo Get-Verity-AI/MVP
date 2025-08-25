@@ -24,27 +24,33 @@ export default function Respond() {
 
   useEffect(() => {
     (async () => {
-      // Check authentication status
+      if (!sid) return;
+      
+      // Check authentication status first (only for testers, not founders)
+      let authStatus = false;
       if (supabase) {
         const { data: { session } } = await supabase.auth.getSession();
-        setIsAuthenticated(!!session?.user);
+        // Only consider authenticated if user has tester role or tester email
+        if (session?.user) {
+          const userEmail = session.user.email;
+          // Check if this is a tester (has verityTesterEmail in localStorage)
+          const testerEmail = localStorage.getItem("verityTesterEmail");
+          authStatus = testerEmail === userEmail;
+        }
       } else {
         // Fallback to localStorage check
         const testerEmail = localStorage.getItem("verityTesterEmail");
-        setIsAuthenticated(!!testerEmail);
+        authStatus = !!testerEmail;
       }
-    })();
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      if (!sid) return;
+      
+      setIsAuthenticated(authStatus);
+      
       try {
         const { data } = await api.get(`/session_questions`, { params: { session_id: sid } });
         let stepsData = (data.steps || []) as Step[];
         
         // Skip account_setup step if user is authenticated
-        if (isAuthenticated) {
+        if (authStatus) {
           stepsData = stepsData.filter(step => step.type !== "account_setup");
         }
         
@@ -53,7 +59,7 @@ export default function Respond() {
         setErr(e?.response?.data?.detail || e.message || "Failed to load questions");
       }
     })();
-  }, [sid, isAuthenticated]);
+  }, [sid]);
 
   const step: any = steps[i];
   const setAnswer = (k: string, v: any) => setAnswers((p) => ({ ...p, [k]: v }));
