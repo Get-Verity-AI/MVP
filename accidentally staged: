@@ -1,0 +1,241 @@
+[1mdiff --git a/backend/app/main.py b/backend/app/main.py[m
+[1mindex 9e68da66..f81a9287 100644[m
+[1m--- a/backend/app/main.py[m
+[1m+++ b/backend/app/main.py[m
+[36m@@ -387,9 +387,10 @@[m [mdef _deterministic_steps(fi_row: dict) -> List[dict]:[m
+         primary_action_label = "take the next step"[m
+ [m
+     steps: List[dict] = [[m
+[31m-        {"type": "input_wallet", "key": "wallet", "label": "Account set up — Web3 auth (connect your wallet)"},[m
+[31m-        {"type": "text", "key": "intro_a",[m
+[31m-         "label": f"Hi! Thank you for taking the time to help {founder}."},[m
+[32m+[m[32m        {"type": "input_wallet", "key": "wallet", "label": "Connect your wallet to get reward for your impact"},[m
+[32m+[m[32m        {"type": "account_setup", "key": "intro_a",[m
+[32m+[m[32m         "title": f"Hi! Thank you for taking the time to help {founder}.",[m
+[32m+[m[32m         "copy": "Sign in and connect your wallet for rewards (optional). Skip if you want to stay anonymous."},[m
+         {"type": "text", "key": "intro_b",[m
+          "label": ("This conversation is just between us — I’ll analyse your insights alongside other "[m
+                    f"responses before I share anonymous headlines with {founder}.")},[m
+[36m@@ -540,7 +541,8 @@[m [mdef submit_responses_sb(req: SubmitAnswersReq):[m
+ [m
+     sb.table("responses").insert({[m
+         "session_id": req.session_id,[m
+[31m-        "tester_id": tester_id,[m
+[32m+[m[32m        "tester_id": tester_id,         # when available[m
+[32m+[m[32m        "tester_email": req.tester_email,   # optional fallback[m
+         "founder_email": sess["founder_email"],[m
+         "answers": req.answers,[m
+         "answer_hash": keccak_hex,[m
+[36m@@ -631,3 +633,20 @@[m [mdef session_responses(session_id: str, include_answers: bool = False, tester_ema[m
+             "answers": (ans if include_answers else None),[m
+         })[m
+     return {"session_id": session_id, "responses": out}[m
+[32m+[m
+[32m+[m[32m@app.get("/tester_responses")[m
+[32m+[m[32mdef tester_responses(uid: str | None = None, tester_email: str | None = None):[m
+[32m+[m[32m    _ensure_sb()[m
+[32m+[m[41m    [m
+[32m+[m[32m    # Server-side fallback query (if tester_id is missing, filter by tester_email)[m
+[32m+[m[32m    if uid:  # supabase auth uid[m
+[32m+[m[32m        rows = sb.table("responses").select("*").eq("tester_id", uid).execute().data[m
+[32m+[m[32m        if rows:[m
+[32m+[m[32m            return {"responses": rows}[m
+[32m+[m
+[32m+[m[32m    # fallback[m
+[32m+[m[32m    if tester_email:[m
+[32m+[m[32m        rows = sb.table("responses").select("*").eq("tester_email", tester_email.lower()).execute().data[m
+[32m+[m[32m        return {"responses": rows}[m
+[32m+[m[41m    [m
+[32m+[m[32m    return {"responses": []}[m
+[1mdiff --git a/miniapp/src/pages/Respond.tsx b/miniapp/src/pages/Respond.tsx[m
+[1mindex 8138cadc..df57f8e1 100644[m
+[1m--- a/miniapp/src/pages/Respond.tsx[m
+[1m+++ b/miniapp/src/pages/Respond.tsx[m
+[36m@@ -37,64 +37,45 @@[m [mexport default function Respond() {[m
+   const back = () => { setErr(null); setI((x) => Math.max(0, x - 1)); };[m
+   function requiredForStep(): string | null {[m
+     if (!step) return null;[m
+[31m-  [m
+[32m+[m
+     // steps that never require input[m
+[31m-    const optional = new Set(["text", "input_wallet"]);[m
+[32m+[m[32m    const optional = new Set(["text", "input_wallet", "account_setup"]);[m
+     if (optional.has(step.type)) return null;[m
+[31m-  [m
+[31m-    // --- problem block: require the score only ---[m
+[32m+[m
+     if (step.type === "problem_block") {[m
+       const scoreKey = `${step.key}_score`;[m
+       const v = answers[scoreKey];[m
+       if (v === undefined || v === "") return "Please provide a 1–5 score.";[m
+       return null;[m
+     }[m
+[31m-  [m
+[31m-    // --- unified question+answer ---[m
+[32m+[m
+     if (step.type === "question_text") {[m
+       const k = step.key;[m
+       const v = k ? answers[k] : "";[m
+       if (!v || String(v).trim() === "") return "Please answer to continue";[m
+       return null;[m
+     }[m
+[31m-  [m
+[31m-    // --- three problems on one page (at least one filled) ---[m
+[31m-    {step.type === "three_problems" && (() => {[m
+[31m-        const s = step as any; // <- cast here too[m
+[31m-        const keys: string[] =[m
+[31m-          Array.isArray(s.binds) && s.binds.length[m
+[31m-            ? (s.binds as string[])[m
+[31m-            : ["problem_1", "problem_2", "problem_3"];[m
+[31m-      [m
+[31m-        const titles: string[] = s.titles || [];[m
+[31m-        const placeholders: string[] = s.placeholders || [];[m
+[31m-      [m
+[31m-        return ([m
+[31m-          <div className="mt12" style={{ display: "grid", gap: 12 }}>[m
+[31m-            <h2 className="step-title" style={{ marginTop: 0 }}>[m
+[31m-              {s.title || s.label || "What are the top 3 problems?"}[m
+[31m-            </h2>[m
+[31m-            {s.hint && <div className="help" style={{ whiteSpace: "pre-wrap" }}>{s.hint}</div>}[m
+[31m-      [m
+[31m-            <div className="stack">[m
+[31m-              {keys.map((k, idx) => ([m
+[31m-                <div className="input-row" key={k}>[m
+[31m-                  <label className="form-title">{titles[idx] || `Problem ${idx + 1}`}</label>[m
+[31m-                  <input[m
+[31m-                    type="text"[m
+[31m-                    placeholder={placeholders[idx] || `Problem ${idx + 1}`}[m
+[31m-                    value={answers[k] || ""}[m
+[31m-                    onChange={(e) => setAnswer(k, e.target.value)}[m
+[31m-                  />[m
+[31m-                </div>[m
+[31m-              ))}[m
+[31m-            </div>[m
+[31m-          </div>[m
+[31m-        );[m
+[31m-      })()}[m
+[31m-      [m
+[31m-  [m
+[31m-    // --- numeric scale with preamble: enforce range if provided ---[m
+[32m+[m
+[32m+[m[32m    // NEW: pricing models — require a number for each model, within range[m
+[32m+[m[32m    if (step.type === "pricing_models_block") {[m
+[32m+[m[32m      const models = Array.isArray((step as any).models) ? (step as any).models : [];[m
+[32m+[m[32m      const min = (step as any).min ?? 1;[m
+[32m+[m[32m      const max = (step as any).max ?? 5;[m
+[32m+[m
+[32m+[m[32m      for (let idx = 0; idx < models.length; idx++) {[m
+[32m+[m[32m        const m = models[idx] || {};[m
+[32m+[m[32m        const key = m.key || `pricing_${idx + 1}`;[m
+[32m+[m[32m        const label = m.label || `Pricing ${idx + 1}`;[m
+[32m+[m[32m        const v = answers[key];[m
+[32m+[m[32m        if (v === undefined || v === "") return `Please rate "${label}" (${min}–${max}).`;[m
+[32m+[m[32m        const n = Number(v);[m
+[32m+[m[32m        if (Number.isNaN(n) || n < min || n > max) {[m
+[32m+[m[32m          return `Please rate "${label}" between ${min} and ${max}.`;[m
+[32m+[m[32m        }[m
+[32m+[m[32m      }[m
+[32m+[m[32m      return null;[m
+[32m+[m[32m    }[m
+[32m+[m
+     if (step.type === "scale_with_preamble") {[m
+       const v = answers[step.key];[m
+       if (v === undefined || v === "") return "Please provide a 1–5 score.";[m
+[36m@@ -104,8 +85,8 @@[m [mexport default function Respond() {[m
+       if (typeof step.max === "number" && n > step.max) return `Maximum is ${step.max}.`;[m
+       return null;[m
+     }[m
+[31m-  [m
+[31m-    // --- generic fallback (text, email, choice, scale, etc.) ---[m
+[32m+[m
+[32m+[m[32m    // generic fallback[m
+     const v = answers[step.key];[m
+     if (v === undefined || v === "" || (typeof v === "string" && v.trim() === "")) {[m
+       return "Please answer to continue";[m
+[36m@@ -259,6 +240,86 @@[m [mexport default function Respond() {[m
+           </div>[m
+         )}[m
+ [m
+[32m+[m[32m        {step.type === "account_setup" && (() => {[m
+[32m+[m[32m          const fieldKey = step.key || "wallet";[m
+[32m+[m[32m          return ([m
+[32m+[m[32m            <div className="mt12" style={{ display: "grid", gap: 12 }}>[m
+[32m+[m[32m              <h2 className="step-title" style={{ marginTop: 0 }}>[m
+[32m+[m[32m                {step.title || step.label || "Account setup"}[m
+[32m+[m[32m              </h2>[m
+[32m+[m
+[32m+[m[32m              <div className="help" style={{ whiteSpace: "pre-wrap" }}>[m
+[32m+[m[32m                {step.copy || "Thanks for taking the time to help this company!"}[m
+[32m+[m[32m              </div>[m
+[32m+[m
+[32m+[m[32m              {answers[fieldKey] ? ([m
+[32m+[m[32m                <div className="row" style={{ alignItems: "center", gap: 8 }}>[m
+[32m+[m[32m                  <span className="pill">Connected: {String(answers[fieldKey])}</span>[m
+[32m+[m[32m                  <button className="btn_secondary" onClick={() => onDisconnectWallet(fieldKey)}>Disconnect</button>[m
+[32m+[m[32m                </div>[m
+[32m+[m[32m              ) : ([m
+[32m+[m[32m                <div style={{ display: "grid", gap: 8 }}>[m
+[32m+[m[32m                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>[m
+[32m+[m[32m                    <button className="btn_primary" onClick={() => onConnectWallet(fieldKey)}>[m
+[32m+[m[32m                      Connect wallet[m
+[32m+[m[32m                    </button>[m
+[32m+[m[32m                    <button className="btn_secondary" onClick={() => window.open('/founder/signin', '_blank')}>[m
+[32m+[m[32m                      Sign in[m
+[32m+[m[32m                    </button>[m
+[32m+[m[32m                    <button className="btn_secondary" onClick={() => window.open('/founder/signup', '_blank')}>[m
+[32m+[m[32m                      Sign up[m
+[32m+[m[32m                    </button>[m
+[32m+[m[32m                  </div>[m
+[32m+[m[32m                  <button className="btn_secondary" onClick={() => setI((x) => x + 1)} title="You can connect later">[m
+[32m+[m[32m                    Skip for now[m
+[32m+[m[32m                  </button>[m
+[32m+[m[32m                </div>[m
+[32m+[m[32m              )}[m
+[32m+[m[32m            </div>[m
+[32m+[m[32m          );[m
+[32m+[m[32m        })()}[m
+[32m+[m
+[32m+[m[32m        {step.type === "pricing_models_block" && (() => {[m
+[32m+[m[32m          const s = step as any;[m
+[32m+[m[32m          const models: Array<{ key?: string; label?: string }> = Array.isArray(s.models) ? s.models : [];[m
+[32m+[m[32m          const min = s.min ?? 1, max = s.max ?? 5;[m
+[32m+[m
+[32m+[m[32m          return ([m
+[32m+[m[32m            <div className="mt12" style={{ display: "grid", gap: 12 }}>[m
+[32m+[m[32m              <h2 className="step-title" style={{ marginTop: 0 }}>[m
+[32m+[m[32m                {s.title || s.label || "Pricing feedback"}[m
+[32m+[m[32m              </h2>[m
+[32m+[m[32m              {s.preamble && ([m
+[32m+[m[32m                <div className="help" style={{ whiteSpace: "pre-wrap" }}>{s.preamble}</div>[m
+[32m+[m[32m              )}[m
+[32m+[m
+[32m+[m[32m              <div className="stack">[m
+[32m+[m[32m                {models.map((m, idx) => {[m
+[32m+[m[32m                  const key = m.key || `pricing_${idx + 1}`;[m
+[32m+[m[32m                  const label = m.label || `Pricing ${idx + 1}`;[m
+[32m+[m[32m                  return ([m
+[32m+[m[32m                    <div className="input-row" key={key}>[m
+[32m+[m[32m                      <label className="form-title">{label}</label>[m
+[32m+[m[32m                      <input[m
+[32m+[m[32m                        type="number"[m
+[32m+[m[32m                        min={min}[m
+[32m+[m[32m                        max={max}[m
+[32m+[m[32m                        value={answers[key] ?? ""}[m
+[32m+[m[32m                        onChange={(e) => {[m
+[32m+[m[32m                          const n = Number(e.target.value);[m
+[32m+[m[32m                          if (!Number.isNaN(n)) setAnswer(key, n);[m
+[32m+[m[32m                          else setAnswer(key, e.target.value);[m
+[32m+[m[32m                        }}[m
+[32m+[m[32m                      />[m
+[32m+[m[32m                      <div className="sub">Rate {min}–{max}</div>[m
+[32m+[m[32m                    </div>[m
+[32m+[m[32m                  );[m
+[32m+[m[32m                })}[m
+[32m+[m[32m              </div>[m
+[32m+[m[32m            </div>[m
+[32m+[m[32m          );[m
+[32m+[m[32m        })()}[m
+[32m+[m
+         <div className="actions mt16" style={{ display: "flex", gap: 8 }}>[m
+           <button className="btn" onClick={back} disabled={i === 0}>Back</button>[m
+           {i < steps.length - 1 ? ([m

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { buildBrowserPreview } from "../lib/tg";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { connectWallet, disconnectWallet } from "../lib/nearWallet";
 
 const API = import.meta.env.VITE_BACKEND_URL as string;
 const BOT = (import.meta.env as any).VITE_BOT_USERNAME as string | undefined;
@@ -35,6 +36,30 @@ export default function FounderDashboard() {
   const [q, setQ] = useState("");
   const [copiedSid, setCopiedSid] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [walletConnected, setWalletConnected] = useState<string | null>(null);
+
+  // Wallet connection functions
+  async function onConnectWallet() {
+    try {
+      const res = await connectWallet();
+      if (typeof res === "string") {
+        setWalletConnected(res);
+      } else if (res && typeof res === "object") {
+        if (res.account) setWalletConnected(res.account);
+      }
+      setErr(null);
+    } catch (e: any) {
+      setErr(e?.message || "Wallet connection failed");
+      setTimeout(() => setErr(null), 2000);
+    }
+  }
+
+  async function onDisconnectWallet() {
+    try { 
+      await disconnectWallet(); 
+      setWalletConnected(null);
+    } catch {}
+  }
 
   useEffect(() => {
     (async () => {
@@ -192,11 +217,24 @@ export default function FounderDashboard() {
             <div className="sub">Signed in as <code>{email}</code></div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
+            {walletConnected ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="pill">Connected: {walletConnected}</span>
+                <button className="btn_secondary" onClick={onDisconnectWallet}>
+                  Disconnect
+                </button>
+              </div>
+            ) : (
+              <button className="btn_primary" onClick={onConnectWallet}>
+                Connect Wallet
+              </button>
+            )}
             {BOT && (
               <a className="btn_primary" href={`https://t.me/${BOT}`} target="_blank" rel="noreferrer">
                 TG Verity
               </a>
             )}
+
             <button
               className="btn_secondary"
               onClick={async () => {
@@ -266,11 +304,6 @@ export default function FounderDashboard() {
                       >
                         {copiedSid === s.id ? "Copied!" : "Share"}
                       </button>
-                      {BOT && (
-                        <a className="btn_chip" href={`https://t.me/${BOT}`} target="_blank" rel="noreferrer">
-                          TG Verity
-                        </a>
-                      )}
                     </div>
                   </div>
                 );
