@@ -35,27 +35,84 @@ export default function Respond() {
   const step: any = steps[i];
   const setAnswer = (k: string, v: any) => setAnswers((p) => ({ ...p, [k]: v }));
   const back = () => { setErr(null); setI((x) => Math.max(0, x - 1)); };
-
   function requiredForStep(): string | null {
     if (!step) return null;
+  
+    // steps that never require input
     const optional = new Set(["text", "input_wallet"]);
     if (optional.has(step.type)) return null;
+  
+    // --- problem block: require the score only ---
     if (step.type === "problem_block") {
       const scoreKey = `${step.key}_score`;
       const v = answers[scoreKey];
       if (v === undefined || v === "") return "Please provide a 1–5 score.";
       return null;
     }
+  
+    // --- unified question+answer ---
+    if (step.type === "question_text") {
+      const k = step.key;
+      const v = k ? answers[k] : "";
+      if (!v || String(v).trim() === "") return "Please answer to continue";
+      return null;
+    }
+  
+    // --- three problems on one page (at least one filled) ---
+    {step.type === "three_problems" && (() => {
+        const s = step as any; // <- cast here too
+        const keys: string[] =
+          Array.isArray(s.binds) && s.binds.length
+            ? (s.binds as string[])
+            : ["problem_1", "problem_2", "problem_3"];
+      
+        const titles: string[] = s.titles || [];
+        const placeholders: string[] = s.placeholders || [];
+      
+        return (
+          <div className="mt12" style={{ display: "grid", gap: 12 }}>
+            <h2 className="step-title" style={{ marginTop: 0 }}>
+              {s.title || s.label || "What are the top 3 problems?"}
+            </h2>
+            {s.hint && <div className="help" style={{ whiteSpace: "pre-wrap" }}>{s.hint}</div>}
+      
+            <div className="stack">
+              {keys.map((k, idx) => (
+                <div className="input-row" key={k}>
+                  <label className="form-title">{titles[idx] || `Problem ${idx + 1}`}</label>
+                  <input
+                    type="text"
+                    placeholder={placeholders[idx] || `Problem ${idx + 1}`}
+                    value={answers[k] || ""}
+                    onChange={(e) => setAnswer(k, e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+      
+  
+    // --- numeric scale with preamble: enforce range if provided ---
     if (step.type === "scale_with_preamble") {
       const v = answers[step.key];
       if (v === undefined || v === "") return "Please provide a 1–5 score.";
+      const n = Number(v);
+      if (Number.isNaN(n)) return "Please enter a number.";
+      if (typeof step.min === "number" && n < step.min) return `Minimum is ${step.min}.`;
+      if (typeof step.max === "number" && n > step.max) return `Maximum is ${step.max}.`;
       return null;
     }
+  
+    // --- generic fallback (text, email, choice, scale, etc.) ---
     const v = answers[step.key];
-    if (v === undefined || v === "") return "Please answer to continue";
+    if (v === undefined || v === "" || (typeof v === "string" && v.trim() === "")) {
+      return "Please answer to continue";
+    }
     return null;
   }
-
+  
   function next() {
     if (!step) return;
     const need = requiredForStep();

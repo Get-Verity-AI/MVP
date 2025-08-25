@@ -245,3 +245,63 @@ input[type="checkbox"]{
   }
 }
 /* ---- Force global light background ---- */
+
+/* ---- Respond page typography (match founder questionnaire scale) ---- */
+.respond .card {
+  max-width: 920px;            /* keep lines readable */
+  padding: 24px;
+}
+
+/* Step badge + small text */
+.respond .pill { font-size: 12px; }
+.respond .sub, .respond .help { font-size: 14px; line-height: 1.5; color: var(--muted); }
+
+/* Main step title/copy (smaller than default huge H2) */
+.respond .step-title {
+  margin: 12px 0 6px 0;
+  font-weight: 600;
+  line-height: 1.35;
+  font-size: clamp(18px, 2vw, 24px); /* scales a bit, but never huge */
+}
+
+/* Long paragraph text inside step titles */
+.respond .copy {
+  display: block;
+  font-size: 16px;
+  line-height: 1.6;
+  max-width: 80ch; /* comfortable read width */
+}
+
+/* Inputs spacing stays tidy */
+.respond textarea,
+.respond input[type="text"],
+.respond input[type="email"],
+.respond input[type="number"] {
+  font-size: 16px;
+}
+
+/* Buttons consistent size */
+.respond .btn,
+.respond .btn_primary,
+.respond .btn_secondary {
+  font-size: 14px;
+  padding: 10px 14px;
+}
+
+/* Slightly tighter layout on large screens */
+@media (min-width: 768px) {
+  .respond .step-title { font-size: 22px; }
+  .respond .copy { font-size: 17px; }
+}
+:root{
+  --card:#111315;      /* used by .badge */
+  --border:#2b2b2b;
+}
+
+/* let .copied border be visible */
+.btn_secondary{ border:1px solid transparent; }
+
+/* disabled buttons look disabled */
+button:disabled, .btn_success:disabled, .btn_secondary:disabled {
+  opacity:.55; cursor:not-allowed;
+}

@@ -73,3 +73,17 @@ miniapp/.env
 package-lock.json
 miniapp/.env
 backend/.env
+miniapp/.env
+backend/.env
+.env
+*.local
+node_modules
+dist
+.pnpm-store
+miniapp/.env
+backend/.env
+.env
+*.local
+node_modules
+dist
+.pnpm-store
