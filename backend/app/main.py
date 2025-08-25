@@ -354,9 +354,13 @@ def _deterministic_steps(fi_row: dict) -> List[dict]:
     if isinstance(price_points, str):
         try: price_points = json.loads(price_points or "[]")
         except Exception: price_points = []
-    chosen_price = None
+    # Convert to float and filter out invalid values
+    valid_price_points = []
     for p in price_points:
-        try: chosen_price = float(p); break
+        try: 
+            price = float(p)
+            if price > 0:  # Only include positive prices
+                valid_price_points.append(price)
         except Exception: pass
 
     segments = fi_row.get("target_segments") or []
@@ -434,10 +438,15 @@ def _deterministic_steps(fi_row: dict) -> List[dict]:
          "label": "On a scale of 1–5 how willing would you be to pay for it?", "min": 1, "max": 5},
     ]
 
-    if is_paid and chosen_price is not None:
-        steps.append({"type": "input_scale", "key": "willing_to_pay_specific",
-                      "label": f"On a scale of 1–5 how willing would you be to pay {chosen_price:g}?",
-                      "min": 1, "max": 5})
+    # Add specific price point questions for each price the founder specified
+    if is_paid and valid_price_points:
+        for idx, price in enumerate(valid_price_points, 1):
+            steps.append({
+                "type": "input_scale", 
+                "key": f"willing_to_pay_price_{idx}",
+                "label": f"On a scale of 1–5 how willing would you be to pay ${price:.2f}?",
+                "min": 1, "max": 5
+            })
 
     steps += [
         {"type": "input_text", "key": "price_fair",
@@ -685,24 +694,36 @@ def tester_questionnaires(uid: str | None = None, tester_email: str | None = Non
                         answerable_questions = 0
                         answers = resp.get("answers", {})
                         
+                        # Debug: print answers for troubleshooting
+                        print(f"DEBUG: Session {session_id}, Answers: {answers}")
+                        print(f"DEBUG: Total questions: {total_questions}")
+                        
                         for question in questions:
                             question_type = question.get("type", "")
                             question_key = question.get("key")
                             
-                            # Only count questions that require answers (exclude text, account_setup, etc.)
-                            if question_type not in ["text", "account_setup"]:
+                            # Only count questions that require answers (exclude text, account_setup, input_email)
+                            # All other types are required: input_text, input_scale, input_choice, problem_block, scale_with_preamble
+                            if question_type not in ["text", "account_setup", "input_email"]:
                                 answerable_questions += 1
+                                print(f"DEBUG: Answerable question - Type: {question_type}, Key: {question_key}")
                                 
                                 if question_key and question_key in answers:
                                     # Consider any non-None answer as answered
                                     answer_value = answers[question_key]
+                                    print(f"DEBUG: Found answer for {question_key}: {answer_value}")
                                     if answer_value is not None:
                                         answered_questions += 1
+                                        print(f"DEBUG: Counted as answered: {question_key}")
+                                else:
+                                    print(f"DEBUG: No answer found for {question_key}")
                         
+                        print(f"DEBUG: Answered: {answered_questions}, Answerable: {answerable_questions}")
                         if answerable_questions > 0:
                             completion_percentage = min(100, int((answered_questions / answerable_questions) * 100))
                         else:
                             completion_percentage = 0
+                        print(f"DEBUG: Final completion percentage: {completion_percentage}%")
                     
                     # Get payment information
                     payment_amount = resp.get("payment_amount", 0)

@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import type { Step } from "../types";
 import { connectWallet, disconnectWallet } from "../lib/nearWallet";
 import { getStartSid } from "../lib/tg";
+import { supabase } from "../lib/supabase";
 
 type AnyAnswers = Record<string, any>;
 
@@ -19,18 +20,40 @@ export default function Respond() {
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      // Check authentication status
+      if (supabase) {
+        const { data: { session } } = await supabase.auth.getSession();
+        setIsAuthenticated(!!session?.user);
+      } else {
+        // Fallback to localStorage check
+        const testerEmail = localStorage.getItem("verityTesterEmail");
+        setIsAuthenticated(!!testerEmail);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
       if (!sid) return;
       try {
         const { data } = await api.get(`/session_questions`, { params: { session_id: sid } });
-        setSteps((data.steps || []) as Step[]);
+        let stepsData = (data.steps || []) as Step[];
+        
+        // Skip account_setup step if user is authenticated
+        if (isAuthenticated) {
+          stepsData = stepsData.filter(step => step.type !== "account_setup");
+        }
+        
+        setSteps(stepsData);
       } catch (e: any) {
         setErr(e?.response?.data?.detail || e.message || "Failed to load questions");
       }
     })();
-  }, [sid]);
+  }, [sid, isAuthenticated]);
 
   const step: any = steps[i];
   const setAnswer = (k: string, v: any) => setAnswers((p) => ({ ...p, [k]: v }));
@@ -42,6 +65,11 @@ export default function Respond() {
     const optional = new Set(["text", "input_wallet", "account_setup"]);
     if (optional.has(step.type)) return null;
 
+    // Make email step optional
+    if (step.type === "input_email") {
+      return null; // Email is always optional
+    }
+
     if (step.type === "problem_block") {
       const scoreKey = `${step.key}_score`;
       const v = answers[scoreKey];
@@ -49,30 +77,26 @@ export default function Respond() {
       return null;
     }
 
-    if (step.type === "question_text") {
+    if (step.type === "input_text") {
       const k = step.key;
       const v = k ? answers[k] : "";
       if (!v || String(v).trim() === "") return "Please answer to continue";
       return null;
     }
 
-    // NEW: pricing models — require a number for each model, within range
-    if (step.type === "pricing_models_block") {
-      const models = Array.isArray((step as any).models) ? (step as any).models : [];
-      const min = (step as any).min ?? 1;
-      const max = (step as any).max ?? 5;
+    if (step.type === "input_scale") {
+      const v = answers[step.key];
+      if (v === undefined || v === "") return "Please provide a score.";
+      const n = Number(v);
+      if (Number.isNaN(n)) return "Please enter a number.";
+      if (typeof step.min === "number" && n < step.min) return `Minimum is ${step.min}.`;
+      if (typeof step.max === "number" && n > step.max) return `Maximum is ${step.max}.`;
+      return null;
+    }
 
-      for (let idx = 0; idx < models.length; idx++) {
-        const m = models[idx] || {};
-        const key = m.key || `pricing_${idx + 1}`;
-        const label = m.label || `Pricing ${idx + 1}`;
-        const v = answers[key];
-        if (v === undefined || v === "") return `Please rate "${label}" (${min}–${max}).`;
-        const n = Number(v);
-        if (Number.isNaN(n) || n < min || n > max) {
-          return `Please rate "${label}" between ${min} and ${max}.`;
-        }
-      }
+    if (step.type === "input_choice") {
+      const v = answers[step.key];
+      if (v === undefined || v === "") return "Please select an option.";
       return null;
     }
 
@@ -86,7 +110,7 @@ export default function Respond() {
       return null;
     }
 
-    // generic fallback
+    // generic fallback for any other question types
     const v = answers[step.key];
     if (v === undefined || v === "" || (typeof v === "string" && v.trim() === "")) {
       return "Please answer to continue";
