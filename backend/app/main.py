@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 from Crypto.Hash import keccak
 import hashlib, json, os, glob, uuid
+from uuid import uuid4
+
 
 # -----------------------------------------------------------------------------
 # App & CORS
@@ -128,16 +130,24 @@ def root():
 class FounderRegister(BaseModel):
     email: str
     display_name: Optional[str] = None
-
 @app.post("/founder/register")
 def founder_register(req: FounderRegister):
     _ensure_sb()
     email = _canon_email(req.email)
-    sb.table("founders").upsert(
-        {"email": email, "display_name": req.display_name or None, "password_hash": "telegram"},
-        on_conflict="email",
-    ).execute()
+
+    # Build the row. Do NOT send "id"; the DB will generate it.
+    row = {
+        "email": email,
+        "display_name": (getattr(req, "display_name", None) or None),
+        # If later you pass Supabase Auth user id, include it:
+        # "user_id": getattr(req, "user_id", None)
+    }
+
+    # Upsert by email (requires unique constraint on email)
+    sb.table("founders").upsert(row, on_conflict="email").execute()
+
     return {"ok": True}
+
 
 # -----------------------------------------------------------------------------
 # File-mode: create session (legacy) — unchanged
@@ -289,13 +299,16 @@ def get_summary_filemode(session_id: str):
 # -----------------------------------------------------------------------------
 # Supabase helpers
 # -----------------------------------------------------------------------------
-def _ensure_founder(email: str):
+def _ensure_founder(email: str, display_name: str | None = None):
     _ensure_sb()
     email = _canon_email(email)
-    sb.table("founders").upsert(
-        {"email": email, "password_hash": "telegram"},
-        on_conflict="email",
-    ).execute()
+    row = {
+        "email": email,
+        "display_name": display_name or None,
+    }
+    # upsert by unique email
+    sb.table("founders").upsert(row, on_conflict="email").execute()
+
 
 def _upsert_founder_inputs(fi: FounderInputsStreamlit) -> str:
     _ensure_sb()
@@ -374,6 +387,7 @@ def _deterministic_steps(fi_row: dict) -> List[dict]:
         primary_action_label = "take the next step"
 
     steps: List[dict] = [
+        {"type": "input_wallet", "key": "wallet", "label": "Account set up — Web3 auth (connect your wallet)"},
         {"type": "text", "key": "intro_a",
          "label": f"Hi! Thank you for taking the time to help {founder}."},
         {"type": "text", "key": "intro_b",
@@ -381,7 +395,6 @@ def _deterministic_steps(fi_row: dict) -> List[dict]:
                    f"responses before I share anonymous headlines with {founder}.")},
         {"type": "text", "key": "intro_c",
          "label": "This will shape how they spend the next months or even years and they need you to be completely honest, please.\nReady to go?"},
-        {"type": "input_wallet", "key": "wallet", "label": "Account set up — Web3 auth (connect your wallet)"},
         {"type": "text", "key": "ctx_head",
          "label": f"{founder} is keen to talk to you about {domain}. Can you tell us a bit about your experience with it?"},
         {"type": "input_text", "key": "context", "label": "Tell us a bit about your experience."},
@@ -431,9 +444,9 @@ def _deterministic_steps(fi_row: dict) -> List[dict]:
          "label": "What would feel intuitively fair in terms of price?"},
         {"type": "input_text", "key": "anything_else",
          "label": f"Is there anything else you think {founder} should know but that you’d prefer they hear from me?"},
-        {"type": "text", "key": "cta_head",
-         "label": f"Would you like to {primary_action_label} now?"},
-        {"type": "input_choice", "key": "cta_choice", "label": "Select one", "options": ["Yes", "No", "Maybe later"]},
+        {"type": "input_choice", "key": "cta_choice", 
+         "label": f"Would you like to {primary_action_label} now?", 
+         "options": ["Yes", "No", "Maybe later"]},
         {"type": "input_email", "key": "email", "label": "If you want updates, drop your email (optional)"},
         {"type": "text", "key": "closing", "label": "Thank you. We really appreciate your time and honesty. 🙏"},
     ]
@@ -500,15 +513,22 @@ def submit_responses_sb(req: SubmitAnswersReq):
 
     # tester upsert
     if req.tester_email and "@" in req.tester_email:
+        email = _canon_email(req.tester_email)
+        # upsert by email (requires testers.email UNIQUE)
         sb.table("testers").upsert(
-            {"email": _canon_email(req.tester_email), "password_hash": "telegram", "telegram_handle": req.tester_handle},
+            {"email": email, "telegram_handle": req.tester_handle},
             on_conflict="email",
         ).execute()
-        tester_row = sb.table("testers").select("id").eq("email", _canon_email(req.tester_email)).single().execute().data
+        tester_row = (
+            sb.table("testers").select("id").eq("email", email).single().execute().data
+        )
         tester_id = tester_row["id"]
     else:
-        anon = f"anon_{datetime.utcnow().timestamp()}@tg.local"
-        t = sb.table("testers").insert({"email": anon, "password_hash": "telegram", "telegram_handle": req.tester_handle}).execute()
+        # make a unique anon email
+        anon = f"anon_{int(datetime.utcnow().timestamp())}@tg.local"
+        t = sb.table("testers").insert(
+            {"email": anon, "telegram_handle": req.tester_handle}
+        ).execute()
         tester_id = t.data[0]["id"]
 
     payload_str = json.dumps(req.answers, sort_keys=True, ensure_ascii=False)
