@@ -520,6 +520,10 @@ def submit_responses_sb(req: SubmitAnswersReq):
     sess = sb.table("sessions").select("id, founder_email").eq("id", req.session_id).single().execute().data
     if not sess: raise HTTPException(404, "Session not found")
 
+    # Prevent founders from submitting responses to their own questionnaires
+    if req.tester_email and _canon_email(req.tester_email) == _canon_email(sess["founder_email"]):
+        raise HTTPException(400, "Founders cannot submit responses to their own questionnaires")
+
     # tester upsert
     if req.tester_email and "@" in req.tester_email:
         email = _canon_email(req.tester_email)
@@ -547,7 +551,8 @@ def submit_responses_sb(req: SubmitAnswersReq):
     except Exception:
         keccak_hex = sha
 
-    sb.table("responses").insert({
+    # Use upsert to handle duplicate submissions gracefully
+    sb.table("responses").upsert({
         "session_id": req.session_id,
         "tester_id": tester_id,         # when available
         "tester_email": req.tester_email,   # optional fallback
@@ -556,7 +561,7 @@ def submit_responses_sb(req: SubmitAnswersReq):
         "answer_hash": keccak_hex,
         "payment_amount": 0,
         "paid": False
-    }).execute()
+    }, on_conflict="session_id,tester_id").execute()
 
     return {"ok": True, "hashes": {"sha256": sha, "keccak": keccak_hex}}
 
@@ -701,6 +706,10 @@ def tester_questionnaires(uid: str | None = None, tester_email: str | None = Non
                         answerable_questions = 0
                         answers = resp.get("answers", {})
                         
+                        print(f"DEBUG: === COMPLETION CALCULATION FOR SESSION {session_id} ===")
+                        print(f"DEBUG: Total questions in session: {total_questions}")
+                        print(f"DEBUG: User answers: {answers}")
+                        
                         for question in questions:
                             question_type = question.get("type", "")
                             question_key = question.get("key")
@@ -708,13 +717,55 @@ def tester_questionnaires(uid: str | None = None, tester_email: str | None = Non
                             # Only count questions that require answers (exclude text, account_setup, input_email)
                             # All other types are required: input_text, input_scale, input_choice, problem_block, scale_with_preamble
                             if question_type not in ["text", "account_setup", "input_email"]:
-                                answerable_questions += 1
-                                
-                                if question_key and question_key in answers:
-                                    # Consider any non-None answer as answered
-                                    answer_value = answers[question_key]
-                                    if answer_value is not None:
+                                # Special handling for problem_block - it generates 3 separate questions
+                                if question_type == "problem_block":
+                                    # Count the 3 sub-questions: score, reason, attempts
+                                    score_key = f"{question_key}_score"
+                                    reason_key = f"{question_key}_reason"
+                                    attempts_key = f"{question_key}_attempts"
+                                    
+                                    answerable_questions += 3
+                                    print(f"DEBUG: ✓ COUNTING problem_block - Key: {question_key} (3 sub-questions)")
+                                    
+                                    # Check each sub-question
+                                    if score_key in answers:
                                         answered_questions += 1
+                                        print(f"DEBUG:   ✓ ANSWERED: {score_key} = {answers[score_key]}")
+                                    else:
+                                        print(f"DEBUG:   ✗ NOT ANSWERED: {score_key}")
+                                        
+                                    if reason_key in answers:
+                                        answered_questions += 1
+                                        print(f"DEBUG:   ✓ ANSWERED: {reason_key} = {answers[reason_key]}")
+                                    else:
+                                        print(f"DEBUG:   ✗ NOT ANSWERED: {reason_key}")
+                                        
+                                    if attempts_key in answers:
+                                        answered_questions += 1
+                                        print(f"DEBUG:   ✓ ANSWERED: {attempts_key} = {answers[attempts_key]}")
+                                    else:
+                                        print(f"DEBUG:   ✗ NOT ANSWERED: {attempts_key}")
+                                else:
+                                    # Regular question types
+                                    answerable_questions += 1
+                                    print(f"DEBUG: ✓ COUNTING - Type: {question_type}, Key: {question_key}")
+                                    
+                                    if question_key and question_key in answers:
+                                        # Consider any answer as answered (even empty strings, 0, etc.)
+                                        answered_questions += 1
+                                        print(f"DEBUG:   ✓ ANSWERED: {question_key} = {answers[question_key]}")
+                                    else:
+                                        print(f"DEBUG:   ✗ NOT ANSWERED: {question_key}")
+                            else:
+                                print(f"DEBUG: ✗ SKIPPING (optional) - Type: {question_type}, Key: {question_key}")
+                        
+                        print(f"DEBUG: Final count - Answered: {answered_questions}, Answerable: {answerable_questions}")
+                        if answerable_questions > 0:
+                            completion_percentage = min(100, int((answered_questions / answerable_questions) * 100))
+                        else:
+                            completion_percentage = 0
+                        print(f"DEBUG: Completion percentage: {completion_percentage}%")
+                        print(f"DEBUG: === END COMPLETION CALCULATION ===")
                         
                         if answerable_questions > 0:
                             completion_percentage = min(100, int((answered_questions / answerable_questions) * 100))
