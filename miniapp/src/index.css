@@ -76,6 +76,28 @@ button,.btn_primary,.btn_secondary,a.btn_primary,a.btn_secondary{
   padding:10px 14px;
   font-weight:600;
 }
+
+/* tab buttons */
+.btn_tab {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px 8px 0 0;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn_tab:hover {
+  background: rgba(0,0,0,0.05);
+  color: var(--ink);
+}
+
+.btn_tab.active {
+  background: var(--panel);
+  color: var(--ink);
+  border-bottom: 2px solid var(--accent);
+}
 .btn_primary{
   background:var(--accent);
   color:#0b2313;

@@ -40,7 +40,7 @@ export default function TesterSignup() {
       // Store email in localStorage for compatibility
       localStorage.setItem("verityTesterEmail", email);
 
-      // Navigate to tester dashboard after successful signup
+      // Always navigate to tester dashboard after successful signup
       nav("/tester/dashboard");
     } catch (error: any) {
       setErr(error.message || "Failed to create account");

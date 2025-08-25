@@ -263,10 +263,20 @@ export default function Respond() {
                     <button className="btn_primary" onClick={() => onConnectWallet(fieldKey)}>
                       Connect wallet
                     </button>
-                    <button className="btn_secondary" onClick={() => window.open('/tester/signin', '_blank')}>
+                    <button className="btn_secondary" onClick={() => {
+                      const returnUrl = encodeURIComponent(window.location.href);
+                      window.open(`/tester/signin?returnTo=${returnUrl}`, '_blank');
+                      // Show message to user
+                      alert("Sign in page opened in new tab. You can continue with the questionnaire here while signing in.");
+                    }}>
                       Sign in
                     </button>
-                    <button className="btn_secondary" onClick={() => window.open('/tester/signup', '_blank')}>
+                    <button className="btn_secondary" onClick={() => {
+                      const returnUrl = encodeURIComponent(window.location.href);
+                      window.open(`/tester/signup?returnTo=${returnUrl}`, '_blank');
+                      // Show message to user
+                      alert("Sign up page opened in new tab. You can continue with the questionnaire here while creating your account.");
+                    }}>
                       Sign up
                     </button>
                   </div>

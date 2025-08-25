@@ -36,7 +36,7 @@ export default function TesterSignin() {
         localStorage.setItem("verityTesterEmail", session.user.email ?? email);
       }
 
-      // Navigate to tester dashboard after successful signin
+      // Always navigate to tester dashboard after successful signin
       nav("/tester/dashboard");
     } catch (error: any) {
       setErr(error.message || "Failed to sign in");
