@@ -130,9 +130,29 @@ export default function Respond() {
     if (need) { setErr(need); return; }
     setSubmitting(true);
     try {
-      const email =
-        answers["email"] && String(answers["email"]).includes("@")
-          ? String(answers["email"]) : undefined;
+      // Get email from answers or authenticated user
+      let email = undefined;
+      
+      // First check if user provided email in the questionnaire
+      if (answers["email"] && String(answers["email"]).includes("@")) {
+        email = String(answers["email"]);
+      }
+      // If no email in answers, check if user is authenticated
+      else if (isAuthenticated) {
+        if (supabase) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user?.email) {
+            email = session.user.email;
+          }
+        } else {
+          // Fallback to localStorage
+          const testerEmail = localStorage.getItem("verityTesterEmail");
+          if (testerEmail && testerEmail.includes("@")) {
+            email = testerEmail;
+          }
+        }
+      }
+      
       await api.post("/responses_sb", { session_id: sid, tester_email: email, answers });
       setDone(true);
     } catch (e: any) {

@@ -656,10 +656,17 @@ def tester_questionnaires(uid: str | None = None, tester_email: str | None = Non
     # Get tester's responses with answers to calculate completion percentage and payment info
     tester_responses = []
     if uid:  # supabase auth uid
+        # Get responses by tester_id (for authenticated users)
         tester_responses = (sb.table("responses")
                            .select("session_id, created_at, answers, payment_amount, paid")
                            .eq("tester_id", uid)
                            .execute().data)
+        # Also get responses by email as fallback
+        if not tester_responses:
+            tester_responses = (sb.table("responses")
+                               .select("session_id, created_at, answers, payment_amount, paid")
+                               .eq("tester_email", tester_email.lower() if tester_email else "")
+                               .execute().data)
     elif tester_email:
         tester_responses = (sb.table("responses")
                            .select("session_id, created_at, answers, payment_amount, paid")
@@ -694,10 +701,6 @@ def tester_questionnaires(uid: str | None = None, tester_email: str | None = Non
                         answerable_questions = 0
                         answers = resp.get("answers", {})
                         
-                        # Debug: print answers for troubleshooting
-                        print(f"DEBUG: Session {session_id}, Answers: {answers}")
-                        print(f"DEBUG: Total questions: {total_questions}")
-                        
                         for question in questions:
                             question_type = question.get("type", "")
                             question_key = question.get("key")
@@ -706,24 +709,17 @@ def tester_questionnaires(uid: str | None = None, tester_email: str | None = Non
                             # All other types are required: input_text, input_scale, input_choice, problem_block, scale_with_preamble
                             if question_type not in ["text", "account_setup", "input_email"]:
                                 answerable_questions += 1
-                                print(f"DEBUG: Answerable question - Type: {question_type}, Key: {question_key}")
                                 
                                 if question_key and question_key in answers:
                                     # Consider any non-None answer as answered
                                     answer_value = answers[question_key]
-                                    print(f"DEBUG: Found answer for {question_key}: {answer_value}")
                                     if answer_value is not None:
                                         answered_questions += 1
-                                        print(f"DEBUG: Counted as answered: {question_key}")
-                                else:
-                                    print(f"DEBUG: No answer found for {question_key}")
                         
-                        print(f"DEBUG: Answered: {answered_questions}, Answerable: {answerable_questions}")
                         if answerable_questions > 0:
                             completion_percentage = min(100, int((answered_questions / answerable_questions) * 100))
                         else:
                             completion_percentage = 0
-                        print(f"DEBUG: Final completion percentage: {completion_percentage}%")
                     
                     # Get payment information
                     payment_amount = resp.get("payment_amount", 0)
