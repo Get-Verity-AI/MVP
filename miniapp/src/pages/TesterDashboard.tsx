@@ -310,12 +310,16 @@ export default function TesterDashboard() {
                        )}
                      </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                      <button 
-                        className="btn_primary" 
-                        onClick={() => continueQuestionnaire(q.share_link)}
-                      >
-                        {q.is_completed ? "Continue" : "Start"}
-                      </button>
+                      {q.completion_percentage === 100 ? (
+                        <span className="badge active">Completed</span>
+                      ) : (
+                        <button 
+                          className="btn_primary" 
+                          onClick={() => continueQuestionnaire(q.share_link)}
+                        >
+                          {q.completion_percentage > 0 ? "Continue" : "Start"}
+                        </button>
+                      )}
                       {q.last_response_at && (
                         <span className="pill" style={{ fontSize: "0.7em" }}>
                           Last: {fmt(q.last_response_at)}

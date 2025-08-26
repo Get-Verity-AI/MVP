@@ -53,7 +53,26 @@ export default function Respond() {
       }
       
       try {
-        const { data } = await api.get(`/session_questions`, { params: { session_id: sid } });
+        // Get user's email for resuming previous answers
+        let userEmail = undefined;
+        if (authStatus) {
+          if (supabase) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.email) {
+              userEmail = session.user.email;
+            }
+          } else {
+            userEmail = localStorage.getItem("verityTesterEmail") || undefined;
+          }
+        }
+        
+        // Get questions with previous answers if user is authenticated
+        const endpoint = userEmail ? `/session_questions_with_answers` : `/session_questions`;
+        const params = userEmail 
+          ? { session_id: sid, tester_email: userEmail }
+          : { session_id: sid };
+          
+        const { data } = await api.get(endpoint, { params });
         let stepsData = (data.steps || []) as Step[];
         
         // Skip account_setup step if user is authenticated
@@ -62,6 +81,41 @@ export default function Respond() {
         }
         
         setSteps(stepsData);
+        
+        // Load previous answers if available
+        if (data.previous_answers && Object.keys(data.previous_answers).length > 0) {
+          setAnswers(data.previous_answers);
+          
+          // Find the first unanswered question to resume from
+          let firstUnansweredIndex = 0;
+          for (let i = 0; i < stepsData.length; i++) {
+            const step = stepsData[i];
+            const stepKey = step.key;
+            
+            // Skip optional steps
+            if (step.type === "text" || step.type === "input_wallet" || step.type === "account_setup" || step.type === "input_email") {
+              continue;
+            }
+            
+            // Check if this step is answered
+            let isAnswered = false;
+            if (step.type === "problem_block") {
+              const scoreKey = `${stepKey}_score`;
+              const reasonKey = `${stepKey}_reason`;
+              const attemptsKey = `${stepKey}_attempts`;
+              isAnswered = data.previous_answers[scoreKey] && data.previous_answers[reasonKey] && data.previous_answers[attemptsKey];
+            } else {
+              isAnswered = data.previous_answers[stepKey];
+            }
+            
+            if (!isAnswered) {
+              firstUnansweredIndex = i;
+              break;
+            }
+          }
+          
+          setI(firstUnansweredIndex);
+        }
       } catch (e: any) {
         setErr(e?.response?.data?.detail || e.message || "Failed to load questions");
       }
@@ -200,10 +254,25 @@ export default function Respond() {
   const reasonKey = step?.type === "problem_block" ? `${step.key}_reason` : null;
   const attemptsKey = step?.type === "problem_block" ? `${step.key}_attempts` : null;
 
+  // Calculate progress
+  const answeredQuestions = Object.keys(answers).length;
+  const totalQuestions = steps.filter(s => 
+    s.type !== "text" && s.type !== "input_wallet" && s.type !== "account_setup" && s.type !== "input_email"
+  ).length;
+  const progressPercentage = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+  const isResuming = answeredQuestions > 0 && i > 0;
+
   return (
     <div className="container">
       <div className="card">
-        <div className="sub"><span className="pill">Step {Math.min(i + 1, steps.length)} of {steps.length}</span></div>
+        <div className="sub">
+          <span className="pill">Step {Math.min(i + 1, steps.length)} of {steps.length}</span>
+          {isResuming && (
+            <span className="pill" style={{ marginLeft: 8, backgroundColor: "#e6f4ff", color: "#1890ff" }}>
+              Resuming... {progressPercentage}% complete
+            </span>
+          )}
+        </div>
 
         {"label" in step && step.label && (
           <h2 className="mt12" style={{ whiteSpace: "pre-wrap" }}>{step.label}</h2>
@@ -387,8 +456,38 @@ export default function Respond() {
           );
         })()}
 
-        <div className="actions mt16" style={{ display: "flex", gap: 8 }}>
+        <div className="actions mt16" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button className="btn" onClick={back} disabled={i === 0}>Back</button>
+          {isResuming && (
+            <button 
+              className="btn secondary" 
+              onClick={() => {
+                const answeredSteps = steps.filter((s, idx) => {
+                  if (s.type === "text" || s.type === "input_wallet" || s.type === "account_setup" || s.type === "input_email") {
+                    return false;
+                  }
+                  if (s.type === "problem_block") {
+                    const scoreKey = `${s.key}_score`;
+                    const reasonKey = `${s.key}_reason`;
+                    const attemptsKey = `${s.key}_attempts`;
+                    return answers[scoreKey] && answers[reasonKey] && answers[attemptsKey];
+                  }
+                  return answers[s.key];
+                });
+                
+                const summary = answeredSteps.map(s => {
+                  const answer = s.type === "problem_block" 
+                    ? `Score: ${answers[`${s.key}_score`]}, Reason: ${answers[`${s.key}_reason`]?.substring(0, 50)}...`
+                    : answers[s.key];
+                  return `${s.label || s.key}: ${answer}`;
+                }).join('\n');
+                
+                alert(`Your previous answers:\n\n${summary}`);
+              }}
+            >
+              Review Answers
+            </button>
+          )}
           {i < steps.length - 1 ? (
             <button className="btn primary" onClick={next}>Next</button>
           ) : (
