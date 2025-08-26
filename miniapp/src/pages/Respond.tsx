@@ -45,6 +45,13 @@ export default function Respond() {
       
       setIsAuthenticated(authStatus);
       
+      // Check if user is signed in as a founder (has verityFounderEmail in localStorage)
+      const founderEmail = localStorage.getItem("verityFounderEmail");
+      if (founderEmail) {
+        setErr("Founders cannot access questionnaire pages. Please sign out from the founder dashboard first.");
+        return;
+      }
+      
       try {
         const { data } = await api.get(`/session_questions`, { params: { session_id: sid } });
         let stepsData = (data.steps || []) as Step[];
