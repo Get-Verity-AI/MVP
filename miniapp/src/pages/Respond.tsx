@@ -263,10 +263,10 @@ export default function Respond() {
                     <button className="btn_primary" onClick={() => onConnectWallet(fieldKey)}>
                       Connect wallet
                     </button>
-                    <button className="btn_secondary" onClick={() => window.open('/founder/signin', '_blank')}>
+                    <button className="btn_secondary" onClick={() => window.open('/tester/signin', '_blank')}>
                       Sign in
                     </button>
-                    <button className="btn_secondary" onClick={() => window.open('/founder/signup', '_blank')}>
+                    <button className="btn_secondary" onClick={() => window.open('/tester/signup', '_blank')}>
                       Sign up
                     </button>
                   </div>
