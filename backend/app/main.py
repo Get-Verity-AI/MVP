@@ -387,12 +387,11 @@ def _deterministic_steps(fi_row: dict) -> List[dict]:
         primary_action_label = "take the next step"
 
     steps: List[dict] = [
-        {"type": "input_wallet", "key": "wallet", "label": "Connect your wallet to get reward for your impact"},
         {"type": "account_setup", "key": "intro_a",
          "title": f"Hi! Thank you for taking the time to help {founder}.",
          "copy": "Sign in and connect your wallet for rewards (optional). Skip if you want to stay anonymous."},
         {"type": "text", "key": "intro_b",
-         "label": ("This conversation is just between us — I’ll analyse your insights alongside other "
+         "label": ("This conversation is just between us — I'll analyse your insights alongside other "
                    f"responses before I share anonymous headlines with {founder}.")},
         {"type": "text", "key": "intro_c",
          "label": "This will shape how they spend the next months or even years and they need you to be completely honest, please.\nReady to go?"},
@@ -634,19 +633,129 @@ def session_responses(session_id: str, include_answers: bool = False, tester_ema
         })
     return {"session_id": session_id, "responses": out}
 
+@app.get("/tester_questionnaires")
+def tester_questionnaires(uid: str | None = None, tester_email: str | None = None):
+    _ensure_sb()
+    
+    # Get all active sessions with founder details
+    sessions = (sb.table("sessions")
+                .select("*, founder_inputs!inner(*)")
+                .eq("status", "active")
+                .order("created_at", desc=True)
+                .execute().data)
+    
+    # Get tester's responses with answers to calculate completion percentage and payment info
+    tester_responses = []
+    if uid:  # supabase auth uid
+        tester_responses = (sb.table("responses")
+                           .select("session_id, created_at, answers, payment_amount, paid")
+                           .eq("tester_id", uid)
+                           .execute().data)
+    elif tester_email:
+        tester_responses = (sb.table("responses")
+                           .select("session_id, created_at, answers, payment_amount, paid")
+                           .eq("tester_email", tester_email.lower())
+                           .execute().data)
+    
+    # Create a set of completed session IDs and calculate completion percentages
+    completed_sessions = {r["session_id"] for r in tester_responses}
+    
+    # Format the questionnaires
+    questionnaires = []
+    for session in sessions:
+        founder_data = session.get("founder_inputs", {})
+        session_id = session["id"]
+        questions = session.get("questions", [])
+        total_questions = len(questions)
+        
+        # Find the latest response for this session by this tester
+        latest_response = None
+        completion_percentage = 0
+        payment_amount = 0
+        paid = False
+        
+        for resp in tester_responses:
+            if resp["session_id"] == session_id:
+                if not latest_response or resp["created_at"] > latest_response["created_at"]:
+                    latest_response = resp
+                    
+                    # Calculate completion percentage based on answered questions
+                    if resp.get("answers") and total_questions > 0:
+                        answered_questions = 0
+                        answers = resp.get("answers", {})
+                        
+                        for question in questions:
+                            question_key = question.get("key")
+                            if question_key and answers.get(question_key):
+                                # Check if the answer is not empty
+                                answer_value = answers[question_key]
+                                if answer_value and str(answer_value).strip():
+                                    answered_questions += 1
+                        
+                        completion_percentage = min(100, int((answered_questions / total_questions) * 100))
+                    
+                    # Get payment information
+                    payment_amount = resp.get("payment_amount", 0)
+                    paid = resp.get("paid", False)
+        
+        questionnaires.append({
+            "session_id": session_id,
+            "company_name": founder_data.get("founder_display_name") or founder_data.get("founder_email") or "Unknown Company",
+            "founder_email": session.get("founder_email", ""),
+            "problem_domain": founder_data.get("problem_domain") or "General",
+            "value_prop": founder_data.get("value_prop", ""),
+            "created_at": session["created_at"],
+            "is_completed": session_id in completed_sessions,
+            "completion_percentage": completion_percentage,
+            "total_questions": total_questions,
+            "payment_amount": payment_amount,
+            "paid": paid,
+            "last_response_at": latest_response["created_at"] if latest_response else None,
+            "share_link": f"{APP_ORIGIN}/respond?sid={session_id}"
+        })
+    
+    return {"questionnaires": questionnaires}
+
 @app.get("/tester_responses")
 def tester_responses(uid: str | None = None, tester_email: str | None = None):
     _ensure_sb()
     
-    # Server-side fallback query (if tester_id is missing, filter by tester_email)
+    # Get responses with session and founder details
     if uid:  # supabase auth uid
-        rows = sb.table("responses").select("*").eq("tester_id", uid).execute().data
-        if rows:
-            return {"responses": rows}
-
-    # fallback
-    if tester_email:
-        rows = sb.table("responses").select("*").eq("tester_email", tester_email.lower()).execute().data
-        return {"responses": rows}
+        # Join responses with sessions and founder_inputs to get company details
+        rows = (sb.table("responses")
+                .select("*, sessions!inner(*, founder_inputs!inner(*))")
+                .eq("tester_id", uid)
+                .order("created_at", desc=True)
+                .execute().data)
+    elif tester_email:
+        # fallback by email
+        rows = (sb.table("responses")
+                .select("*, sessions!inner(*, founder_inputs!inner(*))")
+                .eq("tester_email", tester_email.lower())
+                .order("created_at", desc=True)
+                .execute().data)
+    else:
+        rows = []
     
-    return {"responses": []}
+    # Format the response data
+    formatted_responses = []
+    for row in rows:
+        session_data = row.get("sessions", {})
+        founder_data = session_data.get("founder_inputs", {})
+        
+        formatted_responses.append({
+            "id": row["id"],
+            "session_id": row["session_id"],
+            "created_at": row["created_at"],
+            "answer_hash": row["answer_hash"],
+            "answers": row["answers"],
+            "founder_email": row["founder_email"],
+            "company_name": founder_data.get("founder_display_name") or founder_data.get("founder_email") or "Unknown Company",
+            "problem_domain": founder_data.get("problem_domain") or "General",
+            "session_status": session_data.get("status", "unknown"),
+            "payment_amount": row.get("payment_amount", 0),
+            "paid": row.get("paid", False)
+        })
+    
+    return {"responses": formatted_responses}
